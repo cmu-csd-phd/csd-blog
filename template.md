@@ -13,7 +13,7 @@ tags = ["foobar", "cache-invalidation"]
 
 [extra]
 # For the author field, you can decide to not have a url.
-# If so, simply change the author to be only a string.
+# If so, simply replace the set of author fields with the name string.
 # For example:
 #   author = "Harry Bovik"
 # However, adding a URL is strongly preferred
