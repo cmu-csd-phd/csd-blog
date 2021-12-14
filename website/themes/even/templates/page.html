@@ -4,9 +4,8 @@
 
 {% block title %}{{config.title}} - {{page.title}}{% endblock title %}
 
-{% block content %}
 
-{% if page.toc %}
+{% block toc %}
 <div class="post-toc" id="post-toc">
     <h2 class="post-toc-title">Contents</h2>
     <div class="post-toc-content always-active">
@@ -30,7 +29,9 @@
         </nav>
     </div>
 </div>
-{% endif %}
+{% endblock toc %}
+
+{% block content %}
 
 <article class="post">
     {{ post_macros::title(page=page) }}

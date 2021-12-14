@@ -44,6 +44,19 @@ even_menu = [
     {url = "$BASE_URL/tags", name = "Tags"},
     {url = "$BASE_URL/atom.xml", name = "RSS Feed"},
 ]
+mainsidemenu = [
+    {url = "$BASE_URL/", name = "Home"},
+    {url = "$BASE_URL/areas", name = "Areas", children = [
+      {url = "$BASE_URL/areas/artificial-intelligence", name = "Artificial Intelligence"},
+      {url = "$BASE_URL/areas/graphics", name = "Graphics"},
+      {url = "$BASE_URL/areas/programming-languages", name = "Programming Languages"},
+      {url = "$BASE_URL/areas/security", name = "Security"},
+      {url = "$BASE_URL/areas/systems", name = "Systems"},
+      {url = "$BASE_URL/areas/theory", name = "Theory"},
+    ]},
+    {url = "$BASE_URL/tags", name = "Tags"},
+    {url = "$BASE_URL/atom.xml", name = "RSS Feed"},
+]
 
 # TODO: Scrape all faculty URLs and add them here
 committee_urls = [
