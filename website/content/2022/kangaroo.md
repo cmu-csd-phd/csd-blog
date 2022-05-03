@@ -27,7 +27,7 @@ committee = [
 ]
 +++
 
-Many social-media and Internet-of-Things services have large numbers of tiny objects, each a few hundred bytes of less.
+Many social-media and Internet-of-Things services have large numbers of tiny objects, each a few hundred bytes or less.
 For example, edges in Facebook’s social graph, which are needed to connect friends, posts, and images among other content, [average under 100 bytes](https://www.usenix.org/conference/osdi20/presentation/berg).
 Twitter tweets [average 33 bytes](https://techcrunch.com/2018/10/30/twitters-doubling-of-character-count-from-140-to-280-had-little-impact-on-length-of-tweets/).
 
