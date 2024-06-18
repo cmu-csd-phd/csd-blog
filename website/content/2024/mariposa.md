@@ -125,11 +125,11 @@ source code.  -->
 
 # Instability in SMT-based Program Verification
 
-If you are already familiar with program verification using
-SMT solvers, please feel free to skip this section.
-Otherwise, please allow me to briefly explain why program
-verification is useful, how SMT solvers can help with
-verification, and why instability comes up as a concern.
+If you are already familiar with this background topic,
+please feel free to skip this section. Otherwise, please
+allow me to briefly explain why program verification is
+useful, how SMT solvers can help with verification, and why
+instability comes up as a concern.
 
 As programmers, we often make informal claims about our
 software. For example, I might claim that a filesystem is
@@ -169,13 +169,13 @@ changes.
 # Detecting Instability with Mariposa
 
 Now that we have a basic understanding of the problem, let's
-try to systematically quantify instability. I will introduce
+try to quantify instability systematically. I will introduce
 the methodology used in Mariposa, a tool that we have built
 for this exact propose. In this blog post, I will stick to
-the key intuitions. For a more detailed discussion, I
-encourage you to check out the Mariposa paper. At a high
-level, given a query \\( q \\) and an SMT solver \\( s \\),
-Mariposa answers the question: 
+the key intuitions and elide many of the details. For a more
+thorough discussion, I encourage you to check out the
+Mariposa paper. At a high level, given a query \\( q \\) and
+an SMT solver \\( s \\), Mariposa answers the question: 
 
 > Is the query-solver pair \\((q, s)\\) stable?
 
@@ -185,8 +185,8 @@ Intuitively, instability means that the performance of \\( s
 \\) diverges when we apply seemingly irrelevant mutations to
 \\( q \\). Mariposa detects instability by generating a set
 of mutated queries and evaluating the performance of \\( s
-\\) on each mutant. In this section, I will explain the
-mutations used, and how Mariposa decides the stability
+\\) on each mutant. In this section, I will explain what
+mutations are used, and how Mariposa decides the stability
 status of the query-solver pair.
 
 ## What Mutations to Use?
@@ -222,8 +222,8 @@ the order of commands in the generated SMT query.
 Specifically, SMT queries introduce constraints using the
 `assert` command. Shuffling the order in which the
 constraints are declared guarantees syntactic isomorphism.
-Further, the order within a local context is irrelevant to
-the query’s semantics.
+Further, the order in which the constraint is introduced 
+does not change the query’s semantics.
 
 * **Symbol Renaming**. It is common to rename source-level
 methods, types, or variables, which roughly corresponds to
@@ -253,64 +253,170 @@ shuffling to \\( q \\), we obtain a set of mutated queries
 permutations of \\( q \\).  -->
 
 
-## Stable or Not?
+## Is it Stable or Not?
 
-<!-- I will assume a single
-mutation method, such as assertion shuffling, is used. 
- -->
-**Mutant Success Rate**. Intuitively, whether a query-solver
-pair \\( (q, s) \\) is stable depends on how the mutants
-perform. A natural performance metric is the success rate of
-\\( s \\) over mutants of \\( q \\), i.e., the percentage of
-the mutants that are verified by \\( s \\). The success
-rate, denote by \\(r\\), ranges from \\(0\\% \\) to
-\\(100\\% \\). Since it reflects performance consistency.
-Mariposa introduces four stability categories based on the
-\\(r\\) value. 
+Whether a query-solver pair \\( (q, s) \\) is stable or not
+depends on how the mutants perform. A natural performance
+metric is therefore the **Mutant Success Rate**: the
+percentage of \\( q\\)'s mutants that are verified by \\( s \\).
+The success rate, denoted by \\(r\\), reflects performance
+consistency. Mariposa further introduces four stability
+categories based on the \\(r\\) value. 
 
-
- <!-- A low \\(r\\) indicates
-consistently poor results; a high \\(r\\) indicates
-consistently good results; and a moderate \\(r\\) indicates
-inconsistent results, i.e., instability.
- -->
 <!-- The scheme
 includes two additional parameters: \\(r_{solvable}\\)  and
 r stable , which correspond respectively to the lower and
 upper bounds of the success rate range for unstable queries. -->
 
-* **unsolvable**. A low \\(r \\) value \\( (\approx 0\\%)
-  \\) indicates that \\( q \\) is too difficult for\\( s
-\\). For example, if \\( s \\) gives up and returns unknown
-for all members of \\( M_q \\), we may conclude that \\( s
-\\) is unable to solve \\( q \\) or any version of it.
-* **stable**. A high \\(r\\) value \\( (\approx 100\\%) \\)
-  implies stability, meaning \\( s \\) verifies \\( M_q \\)
-consistently.
-* **unstable**. A moderate \\(r\\) value \\( ( 0 \\% \ll  r
+* **Unsolvable**. A low \\(r \\) value \\( (\approx 0\\%)
+  \\) indicates that the performance is consistently poor.
+For example, if \\( s \\) gives up and returns unknown for
+all mutants, we may conclude that \\( q \\) is simply too
+difficult for \\( s \\). 
+* **Unstable**. A moderate \\(r\\) value \\( ( 0 \\% \ll  r
   \ll 100  \\%) \\) indicates that \\( s \\) cannot
 consistently find a proof in the presence of mutations to
-\\( q \\).
-* **inconclusive**. Statistical tests do not result in
-enough confidence to draw a conclusion.
-
-<!-- • unsolvable. Q is too difficult for solver S (r <
-r solvable ). For example, if S gives up and returns
-unknown for all members of M Q , we may conclude
-that S is unable to solve Q or any version of it.
-• unstable. S cannot consistently find a proof in the
-presence of mutations to Q (r solvable ≤ r < r stable ).
-• stable: S proves M Q consistently (r ≥ r stable ).
-• inconclusive: statistical tests do not result in
-enough confidence to draw a conclusion. -->
-
-
+\\( q \\), meaning that we have observed instability.
+* **Stable**. A high \\(r\\) value \\( (\approx 100\\%) \\)
+ means \\( s \\)  the performance is consistently well,
+ which is the ideal case.
+* **Inconclusive**. This category is needed due to a
+technicality that is not super important for our discussion
+here. In short, because Mariposa uses random sampling to
+estimate the success rate, sometimes statistical tests do
+not result in enough confidence to place \\( (q, s) \\) in
+any of the previous three categories.
 
 # Measuring Instability in the Wild
 
-#### Benchmarks
+So far we have discussed Mariposa's methodology to detect
+and quantify SMT-based proof instability. How much
+instability is there in practice? Well, let me share some
+experimental results on existing program verification
+projects.
 
-# Should We Blame the Solver?
+## Projects and Queries
 
-# Should We Blame the Query?
+The table below lists the projects we experimented. I will
+refrain from going into the details of each project, but
+generally speaking, (1) these are all verified system
+software such as storage systems, boot loaders, and
+hypervisors. (2) they all involve non-trivial engineering
+effort, creating a considerable number of SMT queries. (3)
+they are all published at top venues, with source code and
+verification artifacts available online. 
+<!-- One thing I would like to point
+out is that the artifact solver, i.e., the SMT solver used
+in the verification process, are all quite old.  -->
 
+| Project Name  | Source Line Count   | Query Count | Artifact Solver |
+|:------------- | -----------:| -----------:|:-----------:|
+| Komodo\\(_D \\)     | 26K        |  2,054 | Z3 4.5.0 |
+| Komodo\\(_S \\)     | 4K         |  773   | Z3 4.2.2 |
+| VeriBetrKV\\(_D \\) | 44K        |  5,325 | Z3 4.6.0 |
+| VeriBetrKV\\(_L \\) | 49K        |  5,600 | Z3 4.8.5 |
+| Dice\\(_F^⋆\\)      | 25K        |  1,536 | Z3 4.8.5 |
+| vWasm\\(_F \\)     | 15K         |  1,755 | Z3 4.8.5 |
+
+<!-- | Project Name  | Source Line Count   | Query Count |
+|:------------- | -----------:| -----------:|
+| Komodo\\(_D \\)     | 26K        |  2,054 |
+| Komodo\\(_S \\)     | 4K         |  773   |
+| VeriBetrKV\\(_D \\) | 44K        |  5,325 |
+| VeriBetrKV\\(_L \\) | 49K        |  5,600 |
+| Dice\\(_F^⋆\\)      | 25K        |  1,536 |
+| vWasm\\(_F \\)     | 15K         |  1,755 | -->
+
+
+## How Much Instability?
+
+For our experiments, we focus on the Z3 SMT solver, with
+which the projects were developed. We are interested in both
+the current and historical status of SMT stability.
+Therefore, in addition to the latest Z3 solver (version
+4.12.1, as of the work), we include seven legacy versions of
+Z3, with the earliest released in
+2015. In particular, for each project we include its
+artifact solver, which is the version used in the project’s
+artifact.
+
+For each query-solver pair \\( (q, s) \\), we run Mariposa,
+which outputs a stability category. In Figure 1, each
+stacked bar shows the proportions of different categories in
+a project-solver pair. Focusing on Z3 4.12.1 (the right-most
+group), the unstable proportion is \\( 5.0\\% \\) in
+Komodo\\(_D \\), and \\(2.6\\%\\) across all queries. This
+might not seem like a significant number, but think of a
+regular CI where \\(\sim 2\\%\\) of the test cases may fail
+randomly: it would be a nightmare! Nevertheless, developers
+have to bear with this in SMT-based verification. Many of
+the authors have documented the frustration of dealing with
+instability.
+
+<!-- In all project-solver pairs, the majority of queries are
+stable. However, a non-trivial amount of instability
+persists as well.   -->
+
+![The main experiment results from Mariposa.](./mariposa_exp.png)
+
+<figcaption>Figure 1: Overall Stability Status. From bottom to top, each stacked bar shows the proportions of unsolvable (lightly shaded), unstable
+(deeply shaded), and inconclusive (uncolored) queries. The remaining portion of the queries (stacking each bar to 100%), not shown, are
+stable. The solver version used for each project’s artifact is marked with a star (⋆). </figcaption>
+<br>
+
+Now that we know instability is not a rare occurrence, the
+next question is: what gives? Well, as we have discussed
+previously, it is all fundamentally due to undecidability.
+However, let's be a bit more specific about the causes.
+First and foremost, instability is a property of both the
+query and the solver. Therefore, the causes can also be
+categorized as query-related and solver-related.
+
+# What's Wrong with the Solver?
+
+<!-- As we zoom out to the full picture, the projects exhibit
+different historical trends. The unstable proportion of
+vWasm\\(_F\\) and Komodo\\(_S\\) remain consistently small
+across the solver versions.  On the other hand, some
+projects seem "overfitted" to their artifact solver, in that
+they become less stable with solver upgrades. Specifically,
+Komodo\\(_D \\), VeriBetrKV\\(_D \\), and VeriBetrKV\\(_L
+\\) show more instability in newer Z3 versions, with a
+**noticeable gap** between Z3 4.8.5 and Z3 4.8.8.  -->
+
+As you might have noticed in Figure 1 already, there is a
+"gap" between Z3 4.8.5 and 4.8.8, where Komodo\\(_D \\),
+VeriBetrKV\\(_D \\), and VeriBetrKV\\(_L \\) contain more
+unstable queries with the newer solver. In other words,
+certain queries used to be stable, but somehow become
+unstable with the solver upgrade. Since the query did not
+change, solver change must have been the cause to stability
+regression. 
+
+We perform further experiments to narrow down the Z3 git
+commits that may have caused the increase in instability. In
+the six experiment projects, 285 queries are stable under Z3
+4.8.5 but unstable under Z3 4.8.8. For each query in this
+set, we run git bisect (which calls Mariposa) to find the
+commit to blame, i.e., where the query first becomes
+unstable.
+
+There are a total of 1,453 commits between the two versions,
+among which we identify two most impactful commits. Out of
+the 285 queries, 115 (40%) are blamed on commit `5177cc4`.
+Another 77 (27%) of the queries are blamed on `1e770af`. The
+remaining queries are dispersed across the other commits.
+
+These two most significant commits are small and localized:
+`5177cc4` has 2 changed files with 8 additions and 2
+deletions; `1e770af` has only 1 changed file with 18
+additions and 3 deletions. Both commits are related to the
+order of flattened disjunctions. `1e770af`, the earlier of
+the two, sorts the disjunctions, while `5177cc4` adds a new
+term ordering for ASTs, which it uses to replace the
+previous sorting order of disjunctions.
+
+# What's Wrong with the Query?
+
+The other side of the coin is the query itself. As it turns
+out, 
