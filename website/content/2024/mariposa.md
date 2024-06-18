@@ -34,14 +34,17 @@ unfamiliar, you may think of an SMT solver as a "bot" that
 answers logical or mathematical questions. For example, I
 can ask if the following statement holds: 
 
-$$ \exists \, a, b, c \in Z \, | \,
+$$ \exists  a, b, c \in Z  | 
 3a^{2} -2ab -b^2c = 7 $$
 
-Using the SMT standard format, I may express the question as
-the following query. Hopefully the translation is pretty
-self-explanatory. Maybe a quirk is that the expressions are in
-prefix form, where each operator comes before its
-operands.
+Using the SMT-standard format, I can express the question as
+the following query. The translation is  hopefully
+straightforward: the `declare-fun` command creates a 0-arity
+function (i.e., a variable), the `assert` command states the
+formula as a constraint, and the `check-sat` command asks
+the bot to check if the formula holds (is satisfiable) or
+not. A slight quirk is that the expressions are in prefix
+form, where each operator comes before its operand(s).
 
 ```
 (declare-fun a () Int)
@@ -96,7 +99,7 @@ earlier, the SMT solver sticks to precise mathematical
 reasoning, meaning that it should not give any bogus answer.
 Consequently, when it sees hard questions, it is allowed to
 give up. How hard? Well, some questions can be NP-hard! In
-fact, the above examples pertain to Diophantine equations,
+fact, the above queries pertain to Diophantine equations,
 which are undecidable in general. Therefore, no program can
 answer all such questions correctly. The poor bot has to
 resort to heuristics, which may not be robust against
@@ -107,196 +110,207 @@ superficial modifications to the input query.
 What we have observed is the phenomenon of **SMT
 instability**, where trivial changes to the input query may
 incur large performance variations (or even different
-responses) from the solver. While there can be many
+responses) from the solver. While there are many
 applications of SMT solvers, in this blog post, I will focus
-on the instability in **SMT-based program verification**, where
-we ask the SMT solver to prove programs correct. Instability
-manifests as a butterfly effect: small changes in the
-program may lead to large changes in the proof performance
-or even outcome, creating spurious verification failures.
+on instability in **SMT-based program verification**, where
+we ask the solver to prove programs correct. More
+concretely, instability manifests as a butterfly effect:
+even tiny, superficial changes in the program may lead to
+noticeable changes in the proof performance or even create
+spurious verification failures.
 
 <!-- spurious proof failures, where a previously proven program
 may be (wrongfully) rejected after trivial changes to the
 source code.  -->
 
-# Why SMT-based Program Verification?
+# Instability in SMT-based Program Verification
 
-If you already know about program verification, please feel
-free to skip this section. Otherwise, let me briefly explain
-why program verification is useful and how SMT solvers
-can help in this process.
+If you are already familiar with program verification using
+SMT solvers, please feel free to skip this section.
+Otherwise, please allow me to briefly explain why program
+verification is useful, how SMT solvers can help with
+verification, and why instability comes up as a concern.
 
 As programmers, we often make informal claims about our
-software, including its correctness, efficiency, security,
-and so on. However, as myself can also testify, these claims
-can sometimes be unfounded or even straight-up wrong.
-Fortunately, formal verification offers a path to move
-beyond these informal claims.
+software. For example, I might claim that a filesystem is
+crash-safe or an encryption software is secure, etc. However, as
+myself can also testify, these claims can sometimes be
+unfounded or even straight-up wrong. Fortunately, formal
+verification offers a path to move beyond informal claims.
 
-Formal verification uses **mechanized proofs** to show that
-the code meets its specification. In comparison to testing,
-formal verification offers a higher level of assurance,
-since it reasons about all possible inputs, not just the
-ones we have tested. For example, we can show that the
-program never crashes, or that it always terminates. These
-are all fundamentally logical statements. Naturally, we can
-ask the SMT solver to help us prove these statements.
+Formal verification uses proofs to show that the code meets
+its specification. In comparison to testing, formal
+verification offers a higher level of assurance, since it
+reasons about the program's behavior for _all possible
+inputs_, not just the ones in the test cases. In a
+more-or-less [standard
+algorithm](https://en.wikipedia.org/wiki/Predicate_transformer_semantics),
+program properties can be encoded as logical statements,
+often called the verification conditions (VCs). Essentially, the
+task of formal verification is to prove that the VCs hold.
 
-As you might have gathered from the previous example, SMT
-solvers can reason about pretty complex logical statements.
-In practice, SMT solver provides a high degree of
-automation, allowing the developer to skip many of the
-tedious proof steps. 
+As you might have gathered from the previous example, the
+SMT solver can reason about pretty complex logical
+statements. Hence, a natural resort to prove the VCs is
+through an SMT solver. In this way, the solver enables a
+high degree of automation, allowing the developer to skip
+many tedious proof steps. This methodology has made
+verification of complex software systems a reality.
 
-Now hopefully you can see how instability can be a big
-problem in SMT-based program verification. We use program
-verification for higher assurance, but if the verification
-process is unstable, the assurance is less convincing.
+However, SMT-based automation also introduces the problem of
+instability. Verified software, similar to regular software,
+has an iterative development process. As we make incremental
+changes to the code, corresponding queries also change
+constantly. Even seemingly trivial changes, such as renaming
+a variable would create a different query. As we have
+discussed, the solver may not respond consistently to these
+changes. 
 
-## Another Subsection Heading
+# Detecting Instability with Mariposa
 
-Some more text.
-You can write lines
-separately
-and it'll still
-be considered
-a single paragraph. Paragraphs are separated by a
-blank line.
+Now that we have a basic understanding of the problem, let's
+try to systematically quantify instability. I will introduce
+the methodology used in Mariposa, a tool that we have built
+for this exact propose. In this blog post, I will stick to
+the key intuitions. For a more detailed discussion, I
+encourage you to check out the Mariposa paper. At a high
+level, given a query \\( q \\) and an SMT solver \\( s \\),
+Mariposa answers the question: 
 
-# Another Section
-
-You can **bold** things by wrapping them in two asterisks/stars. You
-can _italicise_ things by wrapping them in underscores. You can also
-include inline `code` which is done by wrapping with backticks (the
-key likely to the left of the 1 on your keyboard).
-
-If you want to add larger snippets of code, you can add triple
-backticks around them, like so:
-
-```
-this_is_larger = true;
-show_code(true);
-```
-
-However, the above doesn't add syntax highlighting. If you want to do
-that, you need to specify the specific language on the first line, as
-part of the backticks, like so:
-
-```c
-#include <stdio.h>
-
-int main() {
-   printf("Hello World!");
-   return 0;
-}
-```
-
-If you want to quote someone, simply prefix whatever they said with a
-`>`. For example:
-
-> If it is on the internet, it must be true.
-
--- Abraham Lincoln
-
-You can also nest quotes:
-
-> > You miss 100% of the shots you don't take
->
-> -- Wayne Gretzky
-
--- Michael Scott
-
-Every paragraph _immediately_ after a quote is automatically right
-aligned and pressed up against the quote, since it is assumed to be
-the author/speaker of the quote. You can suppress this by adding a
-`<p></p>` right after a quote, like so:
-
-> This is a quote, whose next para is a normal para, rather than an
-> author/speaker
+> Is the query-solver pair \\((q, s)\\) stable?
 
 <p></p>
 
-This paragraph is perfectly normal, rather than being forced
-right. Additionally, you could also add a `<br />` right beside the
-`<p></p>` to give some more breathing room between the quote and the
-paragraph.
+Intuitively, instability means that the performance of \\( s
+\\) diverges when we apply seemingly irrelevant mutations to
+\\( q \\). Mariposa detects instability by generating a set
+of mutated queries and evaluating the performance of \\( s
+\\) on each mutant. In this section, I will explain the
+mutations used, and how Mariposa decides the stability
+status of the query-solver pair.
 
-In the author notifications above, btw, note how the double-hyphen
-`--` automatically becomes the en-dash (--) and the triple-hyphen
-`---` automatically becomes the em-dash (---). Similarly, double- and
-single-quotes are automagically made into "smart quotes", and the
-ellipsis `...` is automatically cleaned up into an actual ellipsis...
+## What Mutations to Use?
 
----
+In Mariposa, a mutation method needs to preserve the
+semantic meaning and the syntactic structures of a query.
+More precisely, the original query \\( q \\) and its mutant
+\\( q' \\) need to be  both semantically equivalent and
+syntactically isomorphic. 
+<!-- it seems reasonable to expect similar performance from
+the solver on both queries. -->
 
-You can add arbitrary horizontal rules by simply placing three hyphens
-on a line by themselves.
+* **Semantic Equivalence**. \\( q \\) and \\( q' \\) are semantically equivalent
+when there is a bijection between the set of proofs for \\( q \\)
+and those for \\( q' \\) . In other words, a proof of \\( q \\) can be
+transformed into a proof of \\( q' \\) , and vice versa. 
 
----
+* **Syntactic Isomorphism**. \\( q \\) and \\( q' \\)  are
+syntactically isomorphic if there exists a bijection between
+the symbols (e.g., variables) and commands (e.g.,
+`assert`). In other words, each symbol or command in \\( q \\)  has
+a counterpart in \\( q' \\), and vice versa. 
 
-Of course, you can write \\( \LaTeX \\) either inline by placing stuff
-within `\\(` and `\\)` markers, or as a separate equation-style LaTeX
-output by wrapping things in `\\[` and `\\]`:
+For our concrete experiments, we are interested in mutations
+that also correspond to common development practices.
+Specifically, we consider the following three mutation
+methods:
 
-\\[ \sum_{n_1 \in \N} \frac{n_1}{n_2} \\]
+* **Assertion Shuffling**. Reordering of source-level lemmas
+or methods is a common practice when developing verified
+software. Such reordering roughly corresponds to shuffling
+the order of commands in the generated SMT query.
+Specifically, SMT queries introduce constraints using the
+`assert` command. Shuffling the order in which the
+constraints are declared guarantees syntactic isomorphism.
+Further, the order within a local context is irrelevant to
+the query’s semantics.
 
-Alternatively, you can wrap it inside of a pair of double-dollar signs
-`$$`:
+* **Symbol Renaming**. It is common to rename source-level
+methods, types, or variables, which roughly corresponds to
+α-renaming the symbols in the SMT queries. Renaming
+preserves semantic equivalence and syntactic isomorphism, as
+long as the symbol names are used consistently.
 
-$$ \frac{\Phi \in \psi}{\psi \rightarrow \xi} $$
+* **Randomness Reseeding**. SMT solvers optionally take as
+input a random seed, which is used in some of their
+non-deterministic choices. Changing the seed has no effect
+on the query’s semantics but is known to affect the solver’s
+performance. While technically not a mutation, reseeding has
+been used as a proxy for measuring instability, which is a
+reason why we have included it here.
 
-Single dollar signs unfortunately do not work for inline LaTeX.
+<!-- Historically, some verification tools have
+attempted to use reseeding to measure instability: Dafny and
+F* have options to run the same query multiple times with
+different random seeds and report the number of failures
+encountered.
+ -->
 
-# More fun!
-
-Of course, you can add links to things, by using the right syntax. For
-example, [here is a link to NASA](https://www.nasa.gov/). Standard
-HTML-like shenanigans, such as appending a `#anchor` to the end of the
-link also work. Relative links within the website also work.
-
-You can also use the links to link back to parts of the same
-blogpost. For this, you need to find the "slug" of the section. For
-this, you can force a slug at the section heading, and then simply
-refer to it, like the [upcoming section](#finale), or alternatively,
-you can take the lowercase version of all the parts of a section and
-place hyphens between them, like [this](#more-fun) or
-[this](#another-section).
-
-Pictures, of course, can be added. The best way to do this is to
-utilize relative links (just add images into the right directory, see
-the main `README` file in this repository to learn where it should
-go), but you can link to external images too in the same way. For
-example,
-
-![i are serious cat](https://upload.wikimedia.org/wikipedia/commons/4/44/CatLolCatExample.jpg)
-
-Of course, it is good etiquette to add alt-text to your images, like
-has been done in the previous image, with "i are serious cat". It
-helps with accessibility.
-
-Images are automatically shown at a reasonable size by limiting their
-maximum width. If you have a particularly tall image, you might have
-to do some manipulation yourself though. Images should also
-automatically work properly in mobile phones :)
-
----
-
-Do you want some tables? Here are some tables:
+<!-- Let's consider an example. Suppose we have a query \\( q
+\\) with \\( 100 \\) assertions. If we exhaustively apply
+shuffling to \\( q \\), we obtain a set of mutated queries
+\\( M_q \\), with \\(100! \approx 9 \times 10^{157}\\)
+permutations of \\( q \\).  -->
 
 
-| Header 1   | Another header here   | This is a long header |
-|:---------- | ---------------------:|:---------------------:|
-| Some data  | Some more data        | data \\( \epsilon \\) |
-| data       | Some _long_ data here | more data             |
-| align left |   right               | center                |
+## Stable or Not?
 
-You use the `:` specifier in the table header-body splitting line to
-specify whether the particular column should be left, center, or right
-aligned. All the standard markdown elements continue to work within
-the table, so feel free to use them.
+<!-- I will assume a single
+mutation method, such as assertion shuffling, is used. 
+ -->
+**Mutant Success Rate**. Intuitively, whether a query-solver
+pair \\( (q, s) \\) is stable depends on how the mutants
+perform. A natural performance metric is the success rate of
+\\( s \\) over mutants of \\( q \\), i.e., the percentage of
+the mutants that are verified by \\( s \\). The success
+rate, denote by \\(r\\), ranges from \\(0\\% \\) to
+\\(100\\% \\). Since it reflects performance consistency.
+Mariposa introduces four stability categories based on the
+\\(r\\) value. 
 
-# Finale {#finale}
 
-Finally, you're at the end of your blogpost! Your name will appear
-again at the end automatically, as will the committee members who will
-(hopefully) approve your blogpost with no changes! Good luck!
+ <!-- A low \\(r\\) indicates
+consistently poor results; a high \\(r\\) indicates
+consistently good results; and a moderate \\(r\\) indicates
+inconsistent results, i.e., instability.
+ -->
+<!-- The scheme
+includes two additional parameters: \\(r_{solvable}\\)  and
+r stable , which correspond respectively to the lower and
+upper bounds of the success rate range for unstable queries. -->
+
+* **unsolvable**. A low \\(r \\) value \\( (\approx 0\\%)
+  \\) indicates that \\( q \\) is too difficult for\\( s
+\\). For example, if \\( s \\) gives up and returns unknown
+for all members of \\( M_q \\), we may conclude that \\( s
+\\) is unable to solve \\( q \\) or any version of it.
+* **stable**. A high \\(r\\) value \\( (\approx 100\\%) \\)
+  implies stability, meaning \\( s \\) verifies \\( M_q \\)
+consistently.
+* **unstable**. A moderate \\(r\\) value \\( ( 0 \\% \ll  r
+  \ll 100  \\%) \\) indicates that \\( s \\) cannot
+consistently find a proof in the presence of mutations to
+\\( q \\).
+* **inconclusive**. Statistical tests do not result in
+enough confidence to draw a conclusion.
+
+<!-- • unsolvable. Q is too difficult for solver S (r <
+r solvable ). For example, if S gives up and returns
+unknown for all members of M Q , we may conclude
+that S is unable to solve Q or any version of it.
+• unstable. S cannot consistently find a proof in the
+presence of mutations to Q (r solvable ≤ r < r stable ).
+• stable: S proves M Q consistently (r ≥ r stable ).
+• inconclusive: statistical tests do not result in
+enough confidence to draw a conclusion. -->
+
+
+
+# Measuring Instability in the Wild
+
+#### Benchmarks
+
+# Should We Blame the Solver?
+
+# Should We Blame the Query?
+
