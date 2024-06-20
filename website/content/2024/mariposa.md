@@ -32,14 +32,14 @@ The Satisfiability Modulo Theories (SMT) solver is a powerful
 tool for automated reasoning. For those who are unfamiliar,
 you may think of an SMT solver as a "bot" that answers
 logical or mathematical questions. For example, let's say I
-would like to know whether there exits integers \\(a, b,
+would like to know whether there exists integers \\(a, b,
 c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). 
 
 <!-- $$ \exists  a, b, c \in Z  | 
 3a^{2} -2ab -b^2c = 7 $$
  -->
-Using the SMT-standard format, I can express the question as
-the following query. The translation is  hopefully
+Using the SMT-standard format, I question can be written as
+the following query. The translation is hopefully
 straightforward: the `declare-fun` command creates a
 variable (a 0-arity function), the `assert` command states
 the equation as a constraint. More generally, an SMT query
@@ -104,7 +104,7 @@ earlier, the SMT solver sticks to precise mathematical
 reasoning, meaning that it should never give any bogus answer.
 Consequently, when it sees hard questions, it is allowed to
 give up. How hard? Well, some questions can be NP-hard! In
-fact, the example above pertains to Diophantine equations,
+fact, the example above pertains to [Diophantine equations](https://en.wikipedia.org/wiki/Diophantine_equation),
 which are undecidable in general. Therefore, no program can
 correctly answer all such questions. The poor bot has to
 resort to heuristics, which may not be robust against
@@ -137,7 +137,7 @@ useful, how SMT solvers can help with verification, and why
 instability comes up as a concern.
 
 As programmers, we often make informal claims about our
-software. For example, I might claim that a filesystem is
+software. For example, I might say that a filesystem is
 crash-safe or an encryption software is secure, etc. However, as
 myself can also testify, these claims can sometimes be
 unfounded or even straight-up wrong. Fortunately, formal
@@ -176,11 +176,11 @@ frustrated developers.
 
 Now that we have a basic understanding of the problem, let's
 try to quantify instability more systematically. I will
-introduce the methodology used in Mariposa, a tool that we
+introduce the methodology used in [Mariposa](https://github.com/secure-foundations/mariposa), a tool that we
 have built for this exact propose. In this blog post, I will
 stick to the key intuitions and elide the details. For a
 more thorough discussion, I encourage you to check out our 
-Mariposa paper. At a high level, given a query \\( q \\) and
+[paper](https://www.andrew.cmu.edu/user/bparno/papers/mariposa.pdf). At a high level, given a query \\( q \\) and
 an SMT solver \\( s \\), Mariposa answers the question: 
 
 > Is the query-solver pair \\((q, s)\\) stable?
@@ -260,8 +260,7 @@ permutations of \\( q \\).  -->
 ## Is it Stable or Not?
 
 Whether a query-solver pair \\( (q, s) \\) is stable or not
-depends on how the mutants perform. A natural measure is
-therefore the **Mutant Success Rate**: the percentage of \\(
+depends on how the mutants perform. A natural measure is the **Mutant Success Rate**: the percentage of \\(
 q\\)'s mutants that are verified by \\( s \\). The success
 rate, denoted by \\(r\\), reflects performance consistency.
 Mariposa further introduces four stability categories based
@@ -391,28 +390,27 @@ As you might have noticed already, in Figure 1, there is a
 suffer from noticeably more unstable queries in the newer
 solver. In other words, certain queries used to be stable,
 but somehow become unstable with the solver upgrade. Since
-the query sets did not change, solver change must have been
-the cause of regression. 
+the query sets did not change, solver change is responsible for the regression. 
 
 We perform further experiments to narrow down the Z3 git
-commits that may have caused the uprise in instability. In
-the six experiment projects, \\(285\\) queries are stable
-under Z3 4.8.5 but unstable under Z3 4.8.8. For each query
-in this set, we run git bisect (which calls Mariposa) to
-find the commit to blame, i.e., where the query first
-becomes unstable.
+commits that may have been the problem. In the six
+experiment projects, \\(285\\) queries are stable under Z3
+4.8.5 but unstable under Z3 4.8.8. For each query in this
+set, we run [git bisect](https://www.git-scm.com/docs/git-bisect) (which calls Mariposa) to find the
+commit to blame, i.e., where the query first becomes
+unstable.
 
 There are a total of \\(1,453\\) commits between the two versions,
 among which we identify two most impactful commits. Out of
-the \\(285\\) queries, \\(115 (40\\%)\\) are blamed on commit `5177cc4`.
+the \\(285\\) regressed queries, \\(115 (40\\%)\\) are blamed on commit `5177cc4`.
 Another \\(77 (27\\%) \\)of the queries are blamed on `1e770af`. The
 remaining queries are dispersed across the other commits.
 
 The two commits are small and localized: `5177cc4` has \\( 2
 \\) changed files with \\( 8 \\) additions and \\( 2 \\)
 deletions; `1e770af` has only \\( 1 \\) changed file with
-\\( 18 \\) additions and \\( 3 \\) deletions. In case it is
-interesting to you, both commits are related to the order of disjunctions in a query's [conjunctive normal form
+\\( 18 \\) additions and \\( 3 \\) deletions. In case you are 
+curious, both commits are related to the order of disjunctions in a query's [conjunctive normal form
 ](https://en.wikipedia.org/wiki/Conjunctive_normal_form).
 `1e770af`, the earlier of the two, sorts the disjunctions,
 while `5177cc4` adds a new term ordering, updating the
@@ -424,28 +422,29 @@ can have a significant impact on stability.
 
 # "Debugging" the Query
 
-Now that we have discussed the solver side of the story, let
-us turn to the queries. As it turns out, the queries we have
-studied often contain a large amount of irrelevant
-information (assertions). Intuitively, we might provide a
-lot of context to the solver to help it find a proof.
-However, the solver may not need all of the context. In
-fact, the presence of irrelevant context can cause
-"confusion" to the solver, leading to instability. 
+The discussion so far are condensed from our work on
+Mariposa. However, we have yet to cover the query side of
+the problem. To that end, let me share some results in our
+ follow-up work on query context. As it turns out, the
+queries we have studied often contain a large amount of
+irrelevant information (assertions). However, the solver may
+not need all of the context to find a proof. In fact, the
+presence of irrelevant information can cause "confusion" to
+the solver, leading to instability. 
 
 <!-- , which can be a major source of
 instability -->
 
 ## Most of the Context is Irrelevant
 
-Our experiments here analyze each query's **unsatisfiable
-core**. Recall that an SMT query is a conjunction of
-assertions. Upon verification success, the solver can report
-an unsatisfiable core, which is the subset of the original
-assertions that constructs the proof. Therefore, this
-"slimed-down" version of the query is an oracle of
-**relevant assertions**, and what is excluded from it can be
-considered irrelevant.
+Our experiments in this section analyze each query's
+[**unsatisfiable core**](https://en.wikipedia.org/wiki/Unsatisfiable_core). Recall that an SMT query is a
+conjunction of assertions. Upon verification success, the
+solver can report an unsat core, which is the subset
+of the original assertions constructing the proof.
+Therefore, this "slimed-down" version of the query is an
+oracle of **relevant assertions**, and what is excluded from
+it can be considered irrelevant.
 
 After acquiring a core, we compare its context to the
 original query. Using the assertion count as a proxy for the
@@ -466,9 +465,9 @@ line for Dice\\(_F^⋆\\). The median relevance ratio is \\(
 project, only \\( 0.06\\% \\) of the context is relevant.
 Please note that I have excluded Komodo\\(_S\\) from the
 experiment, as its queries each contains only a single
-assertion due to its special encoding rules. Nevertheless,
-among the remaining projects, typically \\( 96.23\\% –
-99.94\\% \\) of the context is irrelevant!
+assertion due to special encoding rules. Nevertheless, among
+the remaining projects, typically \\( 96.23\\% – 99.94\\%
+\\) of the context is irrelevant.
 
 <!-- In
 vWasm\\(_F \\), the median is \\( 3.77 \\% \\), which is
@@ -480,11 +479,11 @@ the tedious effort.  -->
 ## Irrelevant Context Harms Stability
 
 Considering the significant amount of irrelevant context, we
-further analyze how that impacts stability. Here we compare
-and contrast the stability of the original queries and their
-cores. Given an original query \\(q\\) and its core
-\\(q_c\\), we introduce the following metrics among the
-possible stability status transitions. 
+further analyze how that impacts stability, by comparing the
+original queries and their core counterparts. Given an
+original query \\(q\\) and its core \\(q_c\\), we introduce
+the following metrics among the possible stability status
+transitions. 
 * **Core Preservation**: given that \\( q \\) is stable, the probability that \\( q_c \\) remains stable.
 * **Core Mitigation**: given that  \\( q \\)  is unstable, the
   probability that  \\( q_c \\) becomes stable.
@@ -498,10 +497,11 @@ original Komodo\\(_D\\) queries, \\(1,914\\) are stable and
 \\(90.3\\%\\) of the unstable ones become stable.
 vWasm\\(_F\\) is the only case where the core has no
 mitigation effect. However, its original unstable query
-count is very low to begin with. As we noted previously,
+count is very low to begin with. 
+<!-- As we noted previously,
 vWasm\\(_F\\) also starts off with more relevant context
 originally. Therefore, the stability of vWasm\\(_F\\) can be
-explained by the manual tuning done by the developers.
+explained by the manual tuning done by the developers. -->
 
 | Project Name  | Stable Count  | Core Preservation | Unstable Count  | Core Mitigation | 
 |:------------- | -----------:| -----------:|-----------:|-----------:|
@@ -516,16 +516,17 @@ Generally, unsat core is highly likely to preserve what is
 stable. Moreover, across all projects, \\(78.3\\%\\) of the
 unstable instances can be mitigated by using the core. In
 other words, irrelevant context can be thought of as **a
-major factor to instability** on the query side! The result
-suggests a promising direction to mitigate instability by
-pruning irrelevant assertions, which we are exploring in our
-ongoing work.
+major factor to instability** on the query side! While this
+is far from an end-to-end solution, the result suggests a
+promising direction to mitigate instability by pruning
+irrelevant assertions, which we are exploring in our ongoing
+work. 
 
 # Takeaways
 
-That was a long stroy! Thank you for bearing with me. Now
-let me also place some TLDRs in case someone has skipped to
-the end.
+Thank you for bearing with me with the long stroy. Now let
+me also place some TLDRs in case someone has skipped ahead
+or wants a quick recap.
 
 * SMT solvers are immensely useful for program verification,
   but it introduces the problem of instability.
@@ -542,5 +543,6 @@ the end.
   instability. Typically, \\( 96.23\\% – 99.94\\% \\) of the
   context is irrelevant, while responsible for \\(
   78.3\\%\\) of the instability observed.
-
-
+* Instability is a joint problem of the solver heuristic and
+    the query property. Therefore, future work may benefit
+  from a holistic approach that considers both sides.
