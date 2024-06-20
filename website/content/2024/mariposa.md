@@ -28,46 +28,51 @@ committee = [
 +++
 
 
-The Satisfiability Modulo Theories (SMT) solver is a
-powerful tool for automated reasoning. For those who are
-unfamiliar, you may think of an SMT solver as a "bot" that
-answers logical or mathematical questions. For example, I
-can ask if the following statement holds: 
+The Satisfiability Modulo Theories (SMT) solver is a powerful
+tool for automated reasoning. For those who are unfamiliar,
+you may think of an SMT solver as a "bot" that answers
+logical or mathematical questions. For example, let's say I
+would like to know whether there exits integers \\(a, b,
+c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). 
 
-$$ \exists  a, b, c \in Z  | 
+<!-- $$ \exists  a, b, c \in Z  | 
 3a^{2} -2ab -b^2c = 7 $$
-
+ -->
 Using the SMT-standard format, I can express the question as
 the following query. The translation is  hopefully
-straightforward: the `declare-fun` command creates a 0-arity
-function (i.e., a variable), the `assert` command states the
-formula as a constraint, and the `check-sat` command asks
-the bot to check if the formula holds (is satisfiable) or
-not. A slight quirk is that the expressions are in prefix
-form, where each operator comes before its operand(s).
+straightforward: the `declare-fun` command creates a
+variable (a 0-arity function), the `assert` command states
+the equation as a constraint. More generally, an SMT query
+may contain many assertions, and the `check-sat` command
+checks if the query context, i.e., the _conjunction_ of
+the assertions, is satisfiable.  
+
+<!-- A slight quirk is that the expressions are in prefix form,
+where each operator comes before its operand(s). -->
 
 ```
 (declare-fun a () Int)
 (declare-fun b () Int)
 (declare-fun c () Int)
-(assert (exists ((a Int) (b Int) (c Int))
+(assert 
     (=
         (+ (* 3 a a) (* -2 a b) (* -1 b (* c b)))
         7
     )
-))
+)
 (check-sat)
 ```
-If the bot responds with "Yes", that is good! The answer is
-not so obvious to me at least. What's more, the bot provides
-fairly high assurance about its responses. I will refrain
-from going into the details, but its answer is justified by
-**precise mathematical reasoning**. For example, in this
-case the bot can also provide a solution, `a = 1, b = 2, c =
--2`, which serves as a checkable witness to the "Yes"
-answer.
 
-However, the robot is not perfect. Suppose that I slightly
+Suppose the bot responds with "Yes" (satisfiable) in this
+case. That is good! The answer is not so obvious to me at
+least. What's more, the bot provides fairly high assurance
+about its responses. I will refrain from going into the
+details, but its answer is justified by **precise
+mathematical reasoning**. For this example, the bot can also
+provide a solution, `a = 1, b = 2, c = -2`, which serves as
+a checkable witness to the "Yes" answer.
+
+However, the bot is not perfect. Suppose that I slightly
 tweak the formula and ask again:
 
 <!-- $ \exists \, e, f, g \in Z \, | \,
@@ -78,16 +83,16 @@ tweak the formula and ask again:
 (declare-fun e () Int)
 (declare-fun f () Int)
 (declare-fun g () Int)
-(assert (exists ((e Int) (f Int) (g Int))
+(assert 
     (=
         (+ (* 3 e e) (* -2 e f) (* -1 f (* g f)))
         7
     )
-))
+)
 (check-sat)
 ```
 
-This time, the following may happen: the robot gives up,
+This time, the following may happen: the bot gives up,
 saying "I don't know" to this new query. Understandably,
 this may seem puzzling. As you might have noticed, the two
 queries are essentially the same, just with different
@@ -96,28 +101,28 @@ Is it even a legitimate move for it to give up?
 
 Before you get mad at the bot, let me explain. As mentioned
 earlier, the SMT solver sticks to precise mathematical
-reasoning, meaning that it should not give any bogus answer.
+reasoning, meaning that it should never give any bogus answer.
 Consequently, when it sees hard questions, it is allowed to
 give up. How hard? Well, some questions can be NP-hard! In
-fact, the above queries pertain to Diophantine equations,
+fact, the example above pertains to Diophantine equations,
 which are undecidable in general. Therefore, no program can
-answer all such questions correctly. The poor bot has to
+correctly answer all such questions. The poor bot has to
 resort to heuristics, which may not be robust against
 superficial modifications to the input query.
 
 <!-- ### Instability of SMT Solving -->
 
-What we have observed is the phenomenon of **SMT
-instability**, where trivial changes to the input query may
-incur large performance variations (or even different
-responses) from the solver. While there are many
+What we have observed in this example is the phenomenon of
+**SMT instability**, where trivial changes to the input
+query may incur large performance variations (or even
+different responses) from the solver. While there are many
 applications of SMT solvers, in this blog post, I will focus
 on instability in **SMT-based program verification**, where
 we ask the solver to prove programs correct. More
 concretely, instability manifests as a butterfly effect:
 even tiny, superficial changes in the program may lead to
-noticeable changes in the proof performance or even create
-spurious verification failures.
+noticeable change in proof performance and even spurious
+verification failures.
 
 <!-- spurious proof failures, where a previously proven program
 may be (wrongfully) rejected after trivial changes to the
@@ -125,7 +130,7 @@ source code.  -->
 
 # Instability in SMT-based Program Verification
 
-If you are already familiar with this background topic,
+If you are already familiar with the background topic,
 please feel free to skip this section. Otherwise, please
 allow me to briefly explain why program verification is
 useful, how SMT solvers can help with verification, and why
@@ -159,21 +164,22 @@ verification of complex software systems a reality.
 
 However, SMT-based automation also introduces the problem of
 instability. Verified software, similar to regular software,
-has an iterative development process. As we make incremental
-changes to the code, corresponding queries also change
-constantly. Even seemingly trivial changes, such as renaming
-a variable would create a different query. As we have
-discussed, the solver may not respond consistently to these
-changes. 
+has an iterative development process. As the developers make
+incremental changes to the code, corresponding queries also
+change constantly. Even seemingly trivial changes, such as
+renaming a variable would create a different query. As we
+have discussed, the solver may not respond consistently to
+these changes, leading to confusing verification results and
+frustrated developers.
 
 # Detecting Instability with Mariposa
 
 Now that we have a basic understanding of the problem, let's
-try to quantify instability systematically. I will introduce
-the methodology used in Mariposa, a tool that we have built
-for this exact propose. In this blog post, I will stick to
-the key intuitions and elide many of the details. For a more
-thorough discussion, I encourage you to check out the
+try to quantify instability more systematically. I will
+introduce the methodology used in Mariposa, a tool that we
+have built for this exact propose. In this blog post, I will
+stick to the key intuitions and elide the details. For a
+more thorough discussion, I encourage you to check out our 
 Mariposa paper. At a high level, given a query \\( q \\) and
 an SMT solver \\( s \\), Mariposa answers the question: 
 
@@ -191,11 +197,11 @@ status of the query-solver pair.
 
 ## What Mutations to Use?
 
-In Mariposa, a mutation method needs to preserve the
-semantic meaning and the syntactic structures of a query.
-More precisely, the original query \\( q \\) and its mutant
-\\( q' \\) need to be  both semantically equivalent and
-syntactically isomorphic. 
+In Mariposa, a mutation method needs to preserve not only
+the semantic meaning but also the syntactic structures of a
+query. More precisely, the original query \\( q \\) and its
+mutant \\( q' \\) need to be  both semantically equivalent
+and syntactically isomorphic. 
 <!-- it seems reasonable to expect similar performance from
 the solver on both queries. -->
 
@@ -218,12 +224,10 @@ methods:
 * **Assertion Shuffling**. Reordering of source-level lemmas
 or methods is a common practice when developing verified
 software. Such reordering roughly corresponds to shuffling
-the order of commands in the generated SMT query.
-Specifically, SMT queries introduce constraints using the
-`assert` command. Shuffling the order in which the
-constraints are declared guarantees syntactic isomorphism.
-Further, the order in which the constraint is introduced 
-does not change the query’s semantics.
+the commands in the SMT query. Since an SMT query is
+a conjunction of assertions, the assertion order
+does not impact query semantics. Further, shuffling the
+assertions guarantees syntactic isomorphism.
 
 * **Symbol Renaming**. It is common to rename source-level
 methods, types, or variables, which roughly corresponds to
@@ -256,12 +260,12 @@ permutations of \\( q \\).  -->
 ## Is it Stable or Not?
 
 Whether a query-solver pair \\( (q, s) \\) is stable or not
-depends on how the mutants perform. A natural performance
-metric is therefore the **Mutant Success Rate**: the
-percentage of \\( q\\)'s mutants that are verified by \\( s \\).
-The success rate, denoted by \\(r\\), reflects performance
-consistency. Mariposa further introduces four stability
-categories based on the \\(r\\) value. 
+depends on how the mutants perform. A natural measure is
+therefore the **Mutant Success Rate**: the percentage of \\(
+q\\)'s mutants that are verified by \\( s \\). The success
+rate, denoted by \\(r\\), reflects performance consistency.
+Mariposa further introduces four stability categories based
+on the \\(r\\) value. 
 
 <!-- The scheme
 includes two additional parameters: \\(r_{solvable}\\)  and
@@ -278,10 +282,10 @@ difficult for \\( s \\).
 consistently find a proof in the presence of mutations to
 \\( q \\), meaning that we have observed instability.
 * **Stable**. A high \\(r\\) value \\( (\approx 100\\%) \\)
- means \\( s \\)  the performance is consistently well,
+ means  the performance of \\( s \\) is consistently good,
  which is the ideal case.
 * **Inconclusive**. This category is needed due to a
-technicality that is not super important for our discussion
+technicality that is less important for our discussion
 here. In short, because Mariposa uses random sampling to
 estimate the success rate, sometimes statistical tests do
 not result in enough confidence to place \\( (q, s) \\) in
@@ -290,10 +294,9 @@ any of the previous three categories.
 # Measuring Instability in the Wild
 
 So far we have discussed Mariposa's methodology to detect
-and quantify SMT-based proof instability. How much
-instability is there in practice? Well, let me share some
-experimental results on existing program verification
-projects.
+and quantify instability. How much instability is there in
+practice? Let me share some experimental results from
+existing program verification projects.
 
 ## Projects and Queries
 
@@ -305,9 +308,6 @@ hypervisors. (2) they all involve non-trivial engineering
 effort, creating a considerable number of SMT queries. (3)
 they are all published at top venues, with source code and
 verification artifacts available online. 
-<!-- One thing I would like to point
-out is that the artifact solver, i.e., the SMT solver used
-in the verification process, are all quite old.  -->
 
 | Project Name  | Source Line Count   | Query Count | Artifact Solver |
 |:------------- | -----------:| -----------:|:-----------:|
@@ -344,20 +344,18 @@ For each query-solver pair \\( (q, s) \\), we run Mariposa,
 which outputs a stability category. In Figure 1, each
 stacked bar shows the proportions of different categories in
 a project-solver pair. Focusing on Z3 4.12.1 (the right-most
-group), the unstable proportion is \\( 5.0\\% \\) in
-Komodo\\(_D \\), and \\(2.6\\%\\) across all queries. This
+group), the unstable proportion is the highest in
+Komodo\\(_D \\) (\\( 5.0\\% \\)), and \\(2.6\\%\\) across all queries. This
 might not seem like a significant number, but think of a
 regular CI where \\(\sim 2\\%\\) of the test cases may fail
 randomly: it would be a nightmare! Nevertheless, developers
-have to bear with this in SMT-based verification. Many of
-the authors have documented the frustration of dealing with
-instability.
+have to bear with such burden in SMT-based verification.
 
 <!-- In all project-solver pairs, the majority of queries are
 stable. However, a non-trivial amount of instability
 persists as well.   -->
 
-![The main experiment results from Mariposa.](./mariposa_exp.png)
+<img src="./stability_status.png" alt="historical stability status of Mariposa projects" style="width:100%">
 
 <figcaption>Figure 1: Overall Stability Status. From bottom to top, each stacked bar shows the proportions of unsolvable (lightly shaded), unstable
 (deeply shaded), and inconclusive (uncolored) queries. The remaining portion of the queries (stacking each bar to 100%), not shown, are
@@ -365,14 +363,18 @@ stable. The solver version used for each project’s artifact is marked with a s
 <br>
 
 Now that we know instability is not a rare occurrence, the
-next question is: what gives? Well, as we have discussed
-previously, it is all fundamentally due to undecidability.
-However, let's be a bit more specific about the causes.
-First and foremost, instability is a property of both the
-query and the solver. Therefore, the causes can also be
-categorized as query-related and solver-related.
+next question is: what gives? Granted, we have
+undecidability to blame, but it is possible to be more
+specific about the causes. Instability is a property that is
+jointly determined by the solver and the query. Therefore,
+the causes can roughly be categorized as solver-related and
+query-related.  Of course, I cannot possibly be exhaustive
+here, so let me discuss the significant ones we have found for each side. 
 
-# What's Wrong with the Solver?
+<!-- Before we delve into the details, here is a disclaimer: I
+can only cover significant causes   -->
+
+# "Debugging" the Solver
 
 <!-- As we zoom out to the full picture, the projects exhibit
 different historical trends. The unstable proportion of
@@ -384,39 +386,161 @@ Komodo\\(_D \\), VeriBetrKV\\(_D \\), and VeriBetrKV\\(_L
 \\) show more instability in newer Z3 versions, with a
 **noticeable gap** between Z3 4.8.5 and Z3 4.8.8.  -->
 
-As you might have noticed in Figure 1 already, there is a
-"gap" between Z3 4.8.5 and 4.8.8, where Komodo\\(_D \\),
-VeriBetrKV\\(_D \\), and VeriBetrKV\\(_L \\) contain more
-unstable queries with the newer solver. In other words,
-certain queries used to be stable, but somehow become
-unstable with the solver upgrade. Since the query did not
-change, solver change must have been the cause to stability
-regression. 
+As you might have noticed already, in Figure 1, there is a
+"gap" between Z3 4.8.5 and 4.8.8, where several projects
+suffer from noticeably more unstable queries in the newer
+solver. In other words, certain queries used to be stable,
+but somehow become unstable with the solver upgrade. Since
+the query sets did not change, solver change must have been
+the cause of regression. 
 
 We perform further experiments to narrow down the Z3 git
-commits that may have caused the increase in instability. In
-the six experiment projects, 285 queries are stable under Z3
-4.8.5 but unstable under Z3 4.8.8. For each query in this
-set, we run git bisect (which calls Mariposa) to find the
-commit to blame, i.e., where the query first becomes
-unstable.
+commits that may have caused the uprise in instability. In
+the six experiment projects, \\(285\\) queries are stable
+under Z3 4.8.5 but unstable under Z3 4.8.8. For each query
+in this set, we run git bisect (which calls Mariposa) to
+find the commit to blame, i.e., where the query first
+becomes unstable.
 
-There are a total of 1,453 commits between the two versions,
+There are a total of \\(1,453\\) commits between the two versions,
 among which we identify two most impactful commits. Out of
-the 285 queries, 115 (40%) are blamed on commit `5177cc4`.
-Another 77 (27%) of the queries are blamed on `1e770af`. The
+the \\(285\\) queries, \\(115 (40\\%)\\) are blamed on commit `5177cc4`.
+Another \\(77 (27\\%) \\)of the queries are blamed on `1e770af`. The
 remaining queries are dispersed across the other commits.
 
-These two most significant commits are small and localized:
-`5177cc4` has 2 changed files with 8 additions and 2
-deletions; `1e770af` has only 1 changed file with 18
-additions and 3 deletions. Both commits are related to the
-order of flattened disjunctions. `1e770af`, the earlier of
-the two, sorts the disjunctions, while `5177cc4` adds a new
-term ordering for ASTs, which it uses to replace the
-previous sorting order of disjunctions.
+The two commits are small and localized: `5177cc4` has \\( 2
+\\) changed files with \\( 8 \\) additions and \\( 2 \\)
+deletions; `1e770af` has only \\( 1 \\) changed file with
+\\( 18 \\) additions and \\( 3 \\) deletions. In case it is
+interesting to you, both commits are related to the order of disjunctions in a query's [conjunctive normal form
+](https://en.wikipedia.org/wiki/Conjunctive_normal_form).
+`1e770af`, the earlier of the two, sorts the disjunctions,
+while `5177cc4` adds a new term ordering, updating the
+sorted disjunction order.
 
-# What's Wrong with the Query?
+<!-- The results suggest that the solver's internal heuristics
+can have a significant impact on stability. 
+ -->
 
-The other side of the coin is the query itself. As it turns
-out, 
+# "Debugging" the Query
+
+Now that we have discussed the solver side of the story, let
+us turn to the queries. As it turns out, the queries we have
+studied often contain a large amount of irrelevant
+information (assertions). Intuitively, we might provide a
+lot of context to the solver to help it find a proof.
+However, the solver may not need all of the context. In
+fact, the presence of irrelevant context can cause
+"confusion" to the solver, leading to instability. 
+
+<!-- , which can be a major source of
+instability -->
+
+## Most of the Context is Irrelevant
+
+Our experiments here analyze each query's **unsatisfiable
+core**. Recall that an SMT query is a conjunction of
+assertions. Upon verification success, the solver can report
+an unsatisfiable core, which is the subset of the original
+assertions that constructs the proof. Therefore, this
+"slimed-down" version of the query is an oracle of
+**relevant assertions**, and what is excluded from it can be
+considered irrelevant.
+
+After acquiring a core, we compare its context to the
+original query. Using the assertion count as a proxy for the
+"size" of the context, we examine the **Relevance Ratio**: \\(
+\frac{\\# \text{core\ assertions}}{\\# \text{original\ assertions}} \times 100\\% \\). Since an unsat core is a
+subset of the original query, the lower this ratio is, the
+less context remains, and the more irrelevant context the
+original query has.
+
+<img src="./relevance_ratio.png" alt="small cache" style="width:50%">
+
+<figcaption>Figure 2:  Query Relevance Ratios. More to the left means more irrelevant contexts. Typically, the vast majority of an original query context is irrelevant. </figcaption>
+
+Figure 2 shows the CDFs of the relevance ratios for
+different projects. For example, on the left side lies the
+line for Dice\\(_F^⋆\\). The median relevance ratio is \\(
+0.06\\% \\), meaning that for a typical query in the
+project, only \\( 0.06\\% \\) of the context is relevant.
+Please note that I have excluded Komodo\\(_S\\) from the
+experiment, as its queries each contains only a single
+assertion due to its special encoding rules. Nevertheless,
+among the remaining projects, typically \\( 96.23\\% –
+99.94\\% \\) of the context is irrelevant!
+
+<!-- In
+vWasm\\(_F \\), the median is \\( 3.77 \\% \\), which is
+almost an of order of magnitude higher than the other
+projects. This can be attributed to the manual context
+tuning vWasm\\(_F \\) developers, who explicitly documented
+the tedious effort.  -->
+
+## Irrelevant Context Harms Stability
+
+Considering the significant amount of irrelevant context, we
+further analyze how that impacts stability. Here we compare
+and contrast the stability of the original queries and their
+cores. Given an original query \\(q\\) and its core
+\\(q_c\\), we introduce the following metrics among the
+possible stability status transitions. 
+* **Core Preservation**: given that \\( q \\) is stable, the probability that \\( q_c \\) remains stable.
+* **Core Mitigation**: given that  \\( q \\)  is unstable, the
+  probability that  \\( q_c \\) becomes stable.
+
+We use the Mariposa tool with Z3 version 4.12.5 in this
+experiment. We list the number of original queries and the
+preservation and mitigation scores. As an example, in the
+original Komodo\\(_D\\) queries, \\(1,914\\) are stable and
+\\(93\\) are unstable. In its core counterpart,
+\\(99.4\\%\\) of the stable queries remain stable, while
+\\(90.3\\%\\) of the unstable ones become stable.
+vWasm\\(_F\\) is the only case where the core has no
+mitigation effect. However, its original unstable query
+count is very low to begin with. As we noted previously,
+vWasm\\(_F\\) also starts off with more relevant context
+originally. Therefore, the stability of vWasm\\(_F\\) can be
+explained by the manual tuning done by the developers.
+
+| Project Name  | Stable Count  | Core Preservation | Unstable Count  | Core Mitigation | 
+|:------------- | -----------:| -----------:|-----------:|-----------:|
+| Komodo\\(_D \\)     | 1,914      |  99.4% |  93  | 90.3%|
+| VeriBetrKV\\(_D \\) | 4,983      |  99.5% | 172  | 64.5%|
+| VeriBetrKV\\(_L \\) | 4,999      |  99.6% | 256  | 83.6%|
+| Dice\\(_F^⋆\\)      | 1,483      |  99.6% |  20  | 90.0%|
+| vWasm\\(_F \\)      | 1,731      |  99.7% |   4  |  0.0%|
+| Overall             | 15,110     |  99.5% | 545  | 78.3%|
+
+Generally, unsat core is highly likely to preserve what is
+stable. Moreover, across all projects, \\(78.3\\%\\) of the
+unstable instances can be mitigated by using the core. In
+other words, irrelevant context can be thought of as **a
+major factor to instability** on the query side! The result
+suggests a promising direction to mitigate instability by
+pruning irrelevant assertions, which we are exploring in our
+ongoing work.
+
+# Takeaways
+
+That was a long stroy! Thank you for bearing with me. Now
+let me also place some TLDRs in case someone has skipped to
+the end.
+
+* SMT solvers are immensely useful for program verification,
+  but it introduces the problem of instability.
+* Mariposa is a tool (and a methodology) to detect and
+  quantify instability.
+* Instability is a real concern in existing SMT-based
+  program verification projects. \\(2.6\\%\\) of the queries
+  in our study are unstable using Z3 4.12.1.
+* Tiny changes in the solver heuristics can cause noticeable
+  regression in stability. Just \\( 2 \\) tiny commits to Z3
+   are responsible for \\( 67.3\\% \\) of the regression in
+   our study.
+* Irrelevant context in the queries is a major source of
+  instability. Typically, \\( 96.23\\% – 99.94\\% \\) of the
+  context is irrelevant, while responsible for \\(
+  78.3\\%\\) of the instability observed.
+
+
