@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Mariposa: the Butterfly Effect in SMT-based Program Verification"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-06-08
+date = 2024-06-20
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -28,24 +28,17 @@ committee = [
 +++
 
 
-The Satisfiability Modulo Theories (SMT) solver is a powerful
-tool for automated reasoning. For those who are unfamiliar,
-you may think of an SMT solver as a "bot" that answers
-logical or mathematical questions. For example, let's say I
-would like to know whether there exists integers \\(a, b,
-c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). 
-
-<!-- $$ \exists  a, b, c \in Z  | 
-3a^{2} -2ab -b^2c = 7 $$
- -->
-Using the SMT-standard format, I question can be written as
-the following query. The translation is hopefully
-straightforward: the `declare-fun` command creates a
-variable (a 0-arity function), the `assert` command states
-the equation as a constraint. More generally, an SMT query
-may contain many assertions, and the `check-sat` command
-checks if the query context, i.e., the _conjunction_ of
-the assertions, is satisfiable.  
+The Satisfiability Modulo Theories solver is a powerful tool
+that answers logical and mathematical questions. For example,
+let's say I would like to know whether there exists integers
+\\(a, b, c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). Using
+the SMT-standard format, I can encode the question as the
+query below, where the `declare-fun` command creates a variable (a
+0-arity function), the `assert` command states the equation
+as a constraint. More generally, an SMT query may contain
+multiple assertions, and the `check-sat` command checks if
+the query context, i.e., the _conjunction_ of the
+assertions, is satisfiable.  
 
 <!-- A slight quirk is that the expressions are in prefix form,
 where each operator comes before its operand(s). -->
@@ -63,17 +56,20 @@ where each operator comes before its operand(s). -->
 (check-sat)
 ```
 
-Suppose the bot responds with "Yes" (satisfiable) in this
-case. That is good! The answer is not so obvious to me at
-least. What's more, the bot provides fairly high assurance
-about its responses. I will refrain from going into the
-details, but its answer is justified by **precise
-mathematical reasoning**. For this example, the bot can also
-provide a solution, `a = 1, b = 2, c = -2`, which serves as
-a checkable witness to the "Yes" answer.
+Suppose the solver responds with "Yes" (satisfiable) in this
+case. This is good, because the question is not so
+straightforward to me at least, and the solver gives a
+conclusive answer. What's more, the solver provides fairly
+high assurance about its responses. I will refrain from
+going into the details, but its answer is justified by
+**precise mathematical reasoning**. For this example, the
+solver can also provide a solution, `a = 1, b = 2, c = -2`,
+which serves as a checkable witness to the "Yes" answer.
 
-However, the bot is not perfect. Suppose that I slightly
-tweak the formula and ask again:
+However, the solver is not perfect, because even a seemingly
+benign change to a query can
+trip up the SMT solver, causing it to give up. Suppose that
+I slightly tweak the formula and ask again:
 
 <!-- $ \exists \, e, f, g \in Z \, | \,
 3e^{2} -2ef -e^2g = 7 $
@@ -92,21 +88,24 @@ tweak the formula and ask again:
 (check-sat)
 ```
 
-This time, the following may happen: the bot gives up,
+This time, the following may happen: the solver gives up,
 saying "I don't know" to this new query. Understandably,
 this may seem puzzling. As you might have noticed, the two
 queries are essentially the same, just with different
-variable names. Why would the bot give different responses?
+variable names. Why would the solver give different responses?
 Is it even a legitimate move for it to give up?
 
-Before you get mad at the bot, let me explain. As mentioned
-earlier, the SMT solver sticks to precise mathematical
-reasoning, meaning that it should never give any bogus answer.
-Consequently, when it sees hard questions, it is allowed to
-give up. How hard? Well, some questions can be NP-hard! In
-fact, the example above pertains to [Diophantine equations](https://en.wikipedia.org/wiki/Diophantine_equation),
+Before you get mad at the solver, let me explain why it can
+unexpectedly fail with a seemingly innocuous query change.
+As mentioned earlier, the SMT solver sticks to precise
+mathematical reasoning, meaning that it should never give
+any bogus answer. Consequently, when it sees hard questions,
+it is allowed to give up. How hard? Well, some questions can
+be NP-hard! In fact, the example above pertains to
+[Diophantine
+equations](https://en.wikipedia.org/wiki/Diophantine_equation),
 which are undecidable in general. Therefore, no program can
-correctly answer all such questions. The poor bot has to
+correctly answer all such questions. The poor solver has to
 resort to heuristics, which may not be robust against
 superficial modifications to the input query.
 
@@ -116,7 +115,7 @@ What we have observed in this example is the phenomenon of
 **SMT instability**, where trivial changes to the input
 query may incur large performance variations (or even
 different responses) from the solver. While there are many
-applications of SMT solvers, in this blog post, I will focus
+applications of the SMT solver, in this blog post, I will focus
 on instability in **SMT-based program verification**, where
 we ask the solver to prove programs correct. More
 concretely, instability manifests as a butterfly effect:
@@ -130,11 +129,11 @@ source code.  -->
 
 # Instability in SMT-based Program Verification
 
-If you are already familiar with the background topic,
-please feel free to skip this section. Otherwise, please
-allow me to briefly explain why program verification is
-useful, how SMT solvers can help with verification, and why
-instability comes up as a concern.
+Please allow me to briefly explain why program verification
+is useful, how SMT solvers can help with verification, and
+why instability comes up as a concern. If you are already
+familiar with the background topic, please feel free to skip
+this section. 
 
 As programmers, we often make informal claims about our
 software. For example, I might say that a filesystem is
@@ -154,13 +153,14 @@ program properties can be encoded as logical statements,
 often called the verification conditions (VCs). Essentially, the
 task of formal verification is to prove that the VCs hold.
 
-As you might have gathered from the previous example, the
-SMT solver can reason about pretty complex logical
-statements. Hence, a natural resort to prove the VCs is
-through an SMT solver. In this way, the solver enables a
-high degree of automation, allowing the developer to skip
-many tedious proof steps. This methodology has made
-verification of complex software systems a reality.
+In SMT-based program verification, the solver takes as input
+the VCs and search for proofs. As you might have gathered
+from the previous example, the SMT solver can reason about
+pretty complex logical statements. In this way, the solver
+enables a high degree of automation, allowing the developer
+to skip manual and tedious proof steps. This methodology has
+thus made verification of complex software systems a
+reality.
 
 However, SMT-based automation also introduces the problem of
 instability. Verified software, similar to regular software,
@@ -200,7 +200,7 @@ status of the query-solver pair.
 In Mariposa, a mutation method needs to preserve not only
 the semantic meaning but also the syntactic structures of a
 query. More precisely, the original query \\( q \\) and its
-mutant \\( q' \\) need to be  both semantically equivalent
+mutant \\( q' \\) need to be both semantically equivalent
 and syntactically isomorphic. 
 <!-- it seems reasonable to expect similar performance from
 the solver on both queries. -->
@@ -224,10 +224,10 @@ methods:
 * **Assertion Shuffling**. Reordering of source-level lemmas
 or methods is a common practice when developing verified
 software. Such reordering roughly corresponds to shuffling
-the commands in the SMT query. Since an SMT query is
-a conjunction of assertions, the assertion order
-does not impact query semantics. Further, shuffling the
-assertions guarantees syntactic isomorphism.
+the commands in the query. Since an SMT query is a
+conjunction of assertions, the assertion order does not
+impact query semantics. Further, shuffling the assertions
+guarantees syntactic isomorphism.
 
 * **Symbol Renaming**. It is common to rename source-level
 methods, types, or variables, which roughly corresponds to
@@ -240,8 +240,8 @@ input a random seed, which is used in some of their
 non-deterministic choices. Changing the seed has no effect
 on the query’s semantics but is known to affect the solver’s
 performance. While technically not a mutation, reseeding has
-been used as a proxy for measuring instability, which is a
-reason why we have included it here.
+been used as a proxy for measuring instability, which is why
+we have included it here.
 
 <!-- Historically, some verification tools have
 attempted to use reseeding to measure instability: Dafny and
@@ -301,11 +301,11 @@ existing program verification projects.
 
 The table below lists the projects we experimented. I will
 refrain from going into the details of each project, but
-generally speaking, (1) these are all verified system
+generally speaking: (1) These are all verified system
 software such as storage systems, boot loaders, and
-hypervisors. (2) they all involve non-trivial engineering
+hypervisors. (2) They all involve non-trivial engineering
 effort, creating a considerable number of SMT queries. (3)
-they are all published at top venues, with source code and
+They are all published at top venues, with source code and
 verification artifacts available online. 
 
 | Project Name  | Source Line Count   | Query Count | Artifact Solver |
@@ -339,14 +339,14 @@ Z3, with the earliest released in
 artifact solver, which is the version used in the project’s
 artifact.
 
-For each query-solver pair \\( (q, s) \\), we run Mariposa,
-which outputs a stability category. In Figure 1, each
+Mariposa takes as input each query solver pair \\( (q, s) \\) and outputs a stability category. 
+In Figure 1, each
 stacked bar shows the proportions of different categories in
 a project-solver pair. Focusing on Z3 4.12.1 (the right-most
 group), the unstable proportion is the highest in
 Komodo\\(_D \\) (\\( 5.0\\% \\)), and \\(2.6\\%\\) across all queries. This
-might not seem like a significant number, but think of a
-regular CI where \\(\sim 2\\%\\) of the test cases may fail
+might not seem like a significant number, but think of the
+a regular software project's continuous integration (CI)   where \\(\sim 2\\%\\) of the test cases may fail
 randomly: it would be a nightmare! Nevertheless, developers
 have to bear with such burden in SMT-based verification.
 
@@ -362,13 +362,13 @@ stable. The solver version used for each project’s artifact is marked with a s
 <br>
 
 Now that we know instability is not a rare occurrence, the
-next question is: what gives? Granted, we have
-undecidability to blame, but it is possible to be more
-specific about the causes. Instability is a property that is
-jointly determined by the solver and the query. Therefore,
-the causes can roughly be categorized as solver-related and
-query-related.  Of course, I cannot possibly be exhaustive
-here, so let me discuss the significant ones we have found for each side. 
+next question is: what gives? Rather than blaming it all on
+undecidability, let's try to be more specific about the
+causes. Instability is a property that is jointly determined
+by the solver and the query. Therefore, the causes can
+roughly be categorized as solver-related and query-related.
+Of course, I cannot possibly be exhaustive here, so let me
+discuss the significant ones we have found for each side. 
 
 <!-- Before we delve into the details, here is a disclaimer: I
 can only cover significant causes   -->
@@ -387,7 +387,7 @@ Komodo\\(_D \\), VeriBetrKV\\(_D \\), and VeriBetrKV\\(_L
 
 As you might have noticed already, in Figure 1, there is a
 "gap" between Z3 4.8.5 and 4.8.8, where several projects
-suffer from noticeably more unstable queries in the newer
+suffer from noticeably more instability in the newer
 solver. In other words, certain queries used to be stable,
 but somehow become unstable with the solver upgrade. Since
 the query sets did not change, solver change is responsible for the regression. 
@@ -400,7 +400,7 @@ set, we run [git bisect](https://www.git-scm.com/docs/git-bisect) (which calls M
 commit to blame, i.e., where the query first becomes
 unstable.
 
-There are a total of \\(1,453\\) commits between the two versions,
+There is a total of \\(1,453\\) commits between the two versions,
 among which we identify two most impactful commits. Out of
 the \\(285\\) regressed queries, \\(115 (40\\%)\\) are blamed on commit `5177cc4`.
 Another \\(77 (27\\%) \\)of the queries are blamed on `1e770af`. The
@@ -438,9 +438,9 @@ instability -->
 ## Most of the Context is Irrelevant
 
 Our experiments in this section analyze each query's
-[**unsatisfiable core**](https://en.wikipedia.org/wiki/Unsatisfiable_core). Recall that an SMT query is a
+[**core**](https://en.wikipedia.org/wiki/Unsatisfiable_core). Recall that an SMT query is a
 conjunction of assertions. Upon verification success, the
-solver can report an unsat core, which is the subset
+solver can report a core, which is the subset
 of the original assertions constructing the proof.
 Therefore, this "slimed-down" version of the query is an
 oracle of **relevant assertions**, and what is excluded from
@@ -449,7 +449,7 @@ it can be considered irrelevant.
 After acquiring a core, we compare its context to the
 original query. Using the assertion count as a proxy for the
 "size" of the context, we examine the **Relevance Ratio**: \\(
-\frac{\\# \text{core\ assertions}}{\\# \text{original\ assertions}} \times 100\\% \\). Since an unsat core is a
+\frac{\\# \text{core\ assertions}}{\\# \text{original\ assertions}} \times 100\\% \\). Since a core is a
 subset of the original query, the lower this ratio is, the
 less context remains, and the more irrelevant context the
 original query has.
@@ -489,15 +489,15 @@ transitions.
   probability that  \\( q_c \\) becomes stable.
 
 We use the Mariposa tool with Z3 version 4.12.5 in this
-experiment. We list the number of original queries and the
-preservation and mitigation scores. As an example, in the
-original Komodo\\(_D\\) queries, \\(1,914\\) are stable and
-\\(93\\) are unstable. In its core counterpart,
-\\(99.4\\%\\) of the stable queries remain stable, while
-\\(90.3\\%\\) of the unstable ones become stable.
-vWasm\\(_F\\) is the only case where the core has no
-mitigation effect. However, its original unstable query
-count is very low to begin with. 
+experiment. Below we have listed the number of original
+queries and the preservation and mitigation scores. As an
+example, in the original Komodo\\(_D\\) queries, \\(1,914\\)
+are stable and \\(93\\) are unstable. In its core
+counterpart, \\(99.4\\%\\) of the stable queries remain
+stable, while \\(90.3\\%\\) of the unstable ones become
+stable. The vWasm\\(_F\\) project is the only case where the
+core has no mitigation effect. However, its original
+unstable query count is very low to begin with. 
 <!-- As we noted previously,
 vWasm\\(_F\\) also starts off with more relevant context
 originally. Therefore, the stability of vWasm\\(_F\\) can be
@@ -512,7 +512,7 @@ explained by the manual tuning done by the developers. -->
 | vWasm\\(_F \\)      | 1,731      |  99.7% |   4  |  0.0%|
 | Overall             | 15,110     |  99.5% | 545  | 78.3%|
 
-Generally, unsat core is highly likely to preserve what is
+Generally, the core is highly likely to preserve what is
 stable. Moreover, across all projects, \\(78.3\\%\\) of the
 unstable instances can be mitigated by using the core. In
 other words, irrelevant context can be thought of as **a
@@ -529,7 +529,9 @@ me also place some TLDRs in case someone has skipped ahead
 or wants a quick recap.
 
 * SMT solvers are immensely useful for program verification,
-  but it introduces the problem of instability.
+  but it introduces the problem of instability, where
+  trivial changes to the input query may incur spurious
+  verification failures.
 * Mariposa is a tool (and a methodology) to detect and
   quantify instability.
 * Instability is a real concern in existing SMT-based
@@ -541,8 +543,13 @@ or wants a quick recap.
    our study.
 * Irrelevant context in the queries is a major source of
   instability. Typically, \\( 96.23\\% – 99.94\\% \\) of the
-  context is irrelevant, while responsible for \\(
+  context is irrelevant, while being responsible for \\(
   78.3\\%\\) of the instability observed.
-* Instability is a joint problem of the solver heuristic and
-    the query property. Therefore, future work may benefit
-  from a holistic approach that considers both sides.
+
+Last but not least, I would like to reiterate that
+instability is a joint problem of the solver heuristic and
+the query property. It might seem that I am placing a lot of
+blames in this blog post, but quantifying and localizing the
+causes are the preliminary steps to address the problem. I
+hope that the work we have done can help to improve the
+stability of SMT-based verification in the future.
