@@ -33,8 +33,8 @@ that answers logical and mathematical questions. For example,
 let's say I would like to know whether there exists integers
 \\(a, b, c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). Using
 the SMT-standard format, I can encode the question as the
-query below, where the `declare-fun` command creates a variable (a
-0-arity function), the `assert` command states the equation
+query below, where the `declare-fun` command creates a variable (i.e., a
+function with no argument), the `assert` command states the equation
 as a constraint. More generally, an SMT query may contain
 multiple assertions, and the `check-sat` command checks if
 the query context, i.e., the _conjunction_ of the
@@ -59,9 +59,8 @@ where each operator comes before its operand(s). -->
 Suppose the solver responds with "Yes" (satisfiable) in this
 case. This is good, because the question is not so
 straightforward to me at least, and the solver gives a
-conclusive answer. What's more, the solver provides fairly
-high assurance about its responses. I will refrain from
-going into the details, but its answer is justified by
+definitive answer. What's more, the solver provides fairly
+high assurance about its responses, which are justified by
 **precise mathematical reasoning**. For this example, the
 solver can also provide a solution, `a = 1, b = 2, c = -2`,
 which serves as a checkable witness to the "Yes" answer.
@@ -138,7 +137,7 @@ this section.
 As programmers, we often make informal claims about our
 software. For example, I might say that a filesystem is
 crash-safe or an encryption software is secure, etc. However, as
-myself can also testify, these claims can sometimes be
+many of us can testify, these claims can sometimes be
 unfounded or even straight-up wrong. Fortunately, formal
 verification offers a path to move beyond informal claims.
 
@@ -174,21 +173,21 @@ frustrated developers.
 
 # Detecting Instability with Mariposa
 
-Now that we have a basic understanding of the problem, let's
-try to quantify instability more systematically. I will
+Now that we have a basic understanding of instability, let's
+try to quantify it more systematically. I will
 introduce the methodology used in [Mariposa](https://github.com/secure-foundations/mariposa), a tool that we
-have built for this exact propose. In this blog post, I will
+have built to measure and detect instability. In this blog post, I will
 stick to the key intuitions and elide the details. For a
 more thorough discussion, I encourage you to check out our 
-[paper](https://www.andrew.cmu.edu/user/bparno/papers/mariposa.pdf). At a high level, given a query \\( q \\) and
+[paper](https://www.andrew.cmu.edu/user/bparno/papers/mariposa.pdf). At a high level, given an original query \\( q \\) and
 an SMT solver \\( s \\), Mariposa answers the question: 
 
 > Is the query-solver pair \\((q, s)\\) stable?
 
 <p></p>
 
-Intuitively, instability means that the performance of \\( s
-\\) diverges when we apply seemingly irrelevant mutations to
+Intuitively, instability means that \\( s
+\\) experiences a mix of successes and failures when we apply seemingly irrelevant mutations to
 \\( q \\). Mariposa detects instability by generating a set
 of mutated queries and evaluating the performance of \\( s
 \\) on each mutant. In this section, I will explain what
@@ -231,9 +230,9 @@ guarantees syntactic isomorphism.
 
 * **Symbol Renaming**. It is common to rename source-level
 methods, types, or variables, which roughly corresponds to
-α-renaming the symbols in the SMT queries. Renaming
-preserves semantic equivalence and syntactic isomorphism, as
-long as the symbol names are used consistently.
+renaming the symbols in the SMT queries. As long as the
+symbol names are used consistently, Renaming preserves
+semantic equivalence and syntactic isomorphism. 
 
 * **Randomness Reseeding**. SMT solvers optionally take as
 input a random seed, which is used in some of their
@@ -250,45 +249,63 @@ different random seeds and report the number of failures
 encountered.
  -->
 
-<!-- Let's consider an example. Suppose we have a query \\( q
-\\) with \\( 100 \\) assertions. If we exhaustively apply
-shuffling to \\( q \\), we obtain a set of mutated queries
-\\( M_q \\), with \\(100! \approx 9 \times 10^{157}\\)
-permutations of \\( q \\).  -->
+As an example, suppose we have a query \\( q \\) with \\(
+100 \\) assertions. If we exhaustively apply shuffling to
+\\( q \\), we obtain a set of mutated queries, with \\(100!
+\approx 9 \times 10^{157}\\) permutations of \\( q \\). 
 
 
 ## Is it Stable or Not?
 
 Whether a query-solver pair \\( (q, s) \\) is stable or not
-depends on how the mutants perform. A natural measure is the **Mutant Success Rate**: the percentage of \\(
-q\\)'s mutants that are verified by \\( s \\). The success
-rate, denoted by \\(r\\), reflects performance consistency.
-Mariposa further introduces four stability categories based
-on the \\(r\\) value. 
+depends on how the mutants perform. A natural measure is the
+**Mutant Success Rate**, i.e., the percentage of \\( q\\)'s
+mutants that are verified by \\( s \\). Intuitively, the
+success rate, denoted by \\(r\\), reflects performance
+consistency. A low \\(r\\) indicates consistently poor
+results; a high \\(r\\) indicates consistently good results;
+and a moderate \\(r\\) indicates inconsistent results, i.e.,
+instability.
+
+Mariposa thus introduces four stability categories based on \\(r\\): **unsolvable**, **unstable**, **stable**, and **inconclusive**.  
+The scheme includes two additional parameters:
+\\(r_{solvable}\\) and \\(r_{stable}\\), corresponding to
+the lower and upper range for unstable queries. In our
+concrete experiments, we set \\(r_{solvable} = 5\\% \\) and
+\\(r_{stable} = 95\\%\\).
+
+<img src="./mariposa_categories.png" alt="intuition of Mariposa Categories" style="width:80%">
+
+The **inconclusive** category is needed as a result of
+statistical tests. Specifically, it is often infeasible to
+enumerate all the mutants of a query and obtain the true
+success rate. (Think about the \\(100!\\) mutants or more!)
+Therefore, Mariposa uses random sampling to estimate the
+success rate, and the statistical tests do not result in
+enough confidence to place \\( (q, s) \\) in any of the
+previous three categories when the estimated success rate is
+close to the boundaries.
+
+<!-- , which correspond
+respectively to the lower and upper bounds of the success
+rate range for unstable queries. -->
+
 
 <!-- The scheme
 includes two additional parameters: \\(r_{solvable}\\)  and
 r stable , which correspond respectively to the lower and
 upper bounds of the success rate range for unstable queries. -->
 
-* **Unsolvable**. A low \\(r \\) value \\( (\approx 0\\%)
-  \\) indicates that the performance is consistently poor.
-For example, if \\( s \\) gives up and returns unknown for
-all mutants, we may conclude that \\( q \\) is simply too
-difficult for \\( s \\). 
-* **Unstable**. A moderate \\(r\\) value \\( ( 0 \\% \ll  r
-  \ll 100  \\%) \\) indicates that \\( s \\) cannot
-consistently find a proof in the presence of mutations to
-\\( q \\), meaning that we have observed instability.
-* **Stable**. A high \\(r\\) value \\( (\approx 100\\%) \\)
- means  the performance of \\( s \\) is consistently good,
- which is the ideal case.
+<!-- * **Unsolvable**: \\(r < r_{solvable}  \\) 
+* **Unstable**: \\(  r_{solvable} \leq  r \leq  r_{stable} \\)
+* **Stable**: \\( r_{stable} < r \\)
 * **Inconclusive**. This category is needed due to a
 technicality that is less important for our discussion
 here. In short, because Mariposa uses random sampling to
 estimate the success rate, sometimes statistical tests do
 not result in enough confidence to place \\( (q, s) \\) in
-any of the previous three categories.
+any of the previous three categories. -->
+
 
 # Measuring Instability in the Wild
 
@@ -299,9 +316,8 @@ existing program verification projects.
 
 ## Projects and Queries
 
-The table below lists the projects we experimented. I will
-refrain from going into the details of each project, but
-generally speaking: (1) These are all verified system
+The table below lists the projects we experimented.
+Generally speaking: (1) These are all verified system
 software such as storage systems, boot loaders, and
 hypervisors. (2) They all involve non-trivial engineering
 effort, creating a considerable number of SMT queries. (3)
@@ -339,10 +355,11 @@ Z3, with the earliest released in
 artifact solver, which is the version used in the project’s
 artifact.
 
-Mariposa takes as input each query solver pair \\( (q, s) \\) and outputs a stability category. 
-In Figure 1, each
-stacked bar shows the proportions of different categories in
-a project-solver pair. Focusing on Z3 4.12.1 (the right-most
+We run each project-solver pair through Mariposa. For each
+original query in a project, Mariposa outputs a stability
+category. Therefore, each project-solver pair is associated with
+a breakdown of different stability categories, plotted as
+stacked bars in In Figure 1. Focusing on Z3 4.12.1 (the right-most
 group), the unstable proportion is the highest in
 Komodo\\(_D \\) (\\( 5.0\\% \\)), and \\(2.6\\%\\) across all queries. This
 might not seem like a significant number, but think of the
@@ -409,12 +426,16 @@ remaining queries are dispersed across the other commits.
 The two commits are small and localized: `5177cc4` has \\( 2
 \\) changed files with \\( 8 \\) additions and \\( 2 \\)
 deletions; `1e770af` has only \\( 1 \\) changed file with
-\\( 18 \\) additions and \\( 3 \\) deletions. In case you are 
-curious, both commits are related to the order of disjunctions in a query's [conjunctive normal form
-](https://en.wikipedia.org/wiki/Conjunctive_normal_form).
+\\( 18 \\) additions and \\( 3 \\) deletions. Both commits
+are related to the order of disjunctions in a query's
+[conjunctive normal form](https://en.wikipedia.org/wiki/Conjunctive_normal_form).
 `1e770af`, the earlier of the two, sorts the disjunctions,
 while `5177cc4` adds a new term ordering, updating the
-sorted disjunction order.
+sorted disjunction order. Similar to 
+conjunction order, disjunction order does not affect the
+semantics, but interacts with other solver heuristics. Therefore, 
+the change of disjunction order can be thought of as "internal mutations" 
+to the query, exposing more instability.
 
 <!-- The results suggest that the solver's internal heuristics
 can have a significant impact on stability. 
@@ -422,7 +443,7 @@ can have a significant impact on stability.
 
 # "Debugging" the Query
 
-The discussion so far are condensed from our work on
+The discussion so far is condensed from our work on
 Mariposa. However, we have yet to cover the query side of
 the problem. To that end, let me share some results in our
  follow-up work on query context. As it turns out, the
@@ -442,7 +463,7 @@ Our experiments in this section analyze each query's
 conjunction of assertions. Upon verification success, the
 solver can report a core, which is the subset
 of the original assertions constructing the proof.
-Therefore, this "slimed-down" version of the query is an
+Therefore, this "slimmed-down" version of the query is an
 oracle of **relevant assertions**, and what is excluded from
 it can be considered irrelevant.
 
@@ -524,11 +545,10 @@ work.
 
 # Takeaways
 
-Thank you for bearing with me with the long stroy. Now let
-me also place some TLDRs in case someone has skipped ahead
+I will conclude with some TLDRs in case someone has skipped ahead
 or wants a quick recap.
 
-* SMT solvers are immensely useful for program verification,
+* The SMT solvers is immensely useful for program verification,
   but it introduces the problem of instability, where
   trivial changes to the input query may incur spurious
   verification failures.
@@ -548,8 +568,7 @@ or wants a quick recap.
 
 Last but not least, I would like to reiterate that
 instability is a joint problem of the solver heuristic and
-the query property. It might seem that I am placing a lot of
-blames in this blog post, but quantifying and localizing the
-causes are the preliminary steps to address the problem. I
-hope that the work we have done can help to improve the
-stability of SMT-based verification in the future.
+the query property, which will take a joint effort to
+address. I hope that the work we have done can help to
+improve the stability of SMT-based verification in
+future research and practice.
