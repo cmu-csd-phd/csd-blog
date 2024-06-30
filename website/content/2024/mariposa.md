@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Mariposa: the Butterfly Effect in SMT-based Program Verification"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-06-20
+date = 2024-06-30
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -21,9 +21,9 @@ author = {name = "Yi Zhou", url = "https://yizhou7.github.io/" }
 # The committee specification is simply a list of strings.
 # However, you can also make an object with fields like in the author.
 committee = [
-    "Committee Member 1's Full Name",
-    "Committee Member 2's Full Name",
-    {name = "Harry Q. Bovik", url = "http://www.cs.cmu.edu/~bovik/"},
+    "Giulia Fanti",
+    "Ruben Martins",
+    "Long Pham",
 ]
 +++
 
@@ -280,11 +280,12 @@ The **inconclusive** category is needed as a result of
 statistical tests. Specifically, it is often infeasible to
 enumerate all the mutants of a query and obtain the true
 success rate. (Think about the \\(100!\\) mutants or more!)
-Therefore, Mariposa uses random sampling to estimate the
-success rate, and the statistical tests do not result in
-enough confidence to place \\( (q, s) \\) in any of the
-previous three categories when the estimated success rate is
-close to the boundaries.
+Therefore, Mariposa uses random sampling to **estimate** the
+success rate. When the estimated success rate based on the
+sampled mutants is close to the boundaries, the statistical
+test may not result in enough confidence to place \\( (q, s)
+\\) in any of the previous three categories, yielding an
+inconclusive result.
 
 <!-- , which correspond
 respectively to the lower and upper bounds of the success
