@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Mariposa: the Butterfly Effect in SMT-based Program Verification"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-06-30
+date = 2024-07-28
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -28,12 +28,11 @@ committee = [
 +++
 
 
-The Satisfiability Modulo Theories solver is a powerful tool
-that answers logical and mathematical questions. For example,
-let's say I would like to know whether there exists integers
-\\(a, b, c\\) such that \\(3a^{2} -2ab -b^2c = 7\\). Using
-the SMT-standard format, I can encode the question as the
-query below, where the `declare-fun` command creates a variable (i.e., a
+Satisfiability Modulo Theories (SMT) solvers are powerful tools
+that answer logical and mathematical questions. 
+As an example, let's say I want to know whether there exists integers
+\\(a, b, c\\) such that \\(3a^{2} -2ab -b^2c = 7\\).
+To ask an SMT solver, I need to write an SMT query, which is in a [standardized format](https://smtlib.cs.uiowa.edu/) for expressing logical problems. In the SMT query below, the `declare-fun` command creates a variable (i.e., a
 function with no argument), the `assert` command states the equation
 as a constraint. More generally, an SMT query may contain
 multiple assertions, and the `check-sat` command checks if
@@ -56,14 +55,17 @@ where each operator comes before its operand(s). -->
 (check-sat)
 ```
 
-Suppose the solver responds with "Yes" (satisfiable) in this
-case. This is good, because the question is not so
-straightforward to me at least, and the solver gives a
-definitive answer. What's more, the solver provides fairly
-high assurance about its responses, which are justified by
-**precise mathematical reasoning**. For this example, the
-solver can also provide a solution, `a = 1, b = 2, c = -2`,
-which serves as a checkable witness to the "Yes" answer.
+The possible answers from the SMT solver can be "Yes"
+(satisfiable), "No" (unsatisfiable) or "I don't know"
+(unknown). Suppose the solver responds with "Yes"
+(satisfiable) in this case. This is good, because the
+question is not so straightforward to me at least, and the
+solver gives a definitive answer. What's more, the solver
+provides fairly high assurance about its responses, which
+are justified by **precise mathematical reasoning**. For
+this example, the solver can also provide a solution, `a =
+1, b = 2, c = -2`, which serves as a checkable witness to
+the "Yes" answer.
 
 However, the solver is not perfect, because even a seemingly
 benign change to a query can
@@ -91,22 +93,27 @@ This time, the following may happen: the solver gives up,
 saying "I don't know" to this new query. Understandably,
 this may seem puzzling. As you might have noticed, the two
 queries are essentially the same, just with different
-variable names. Why would the solver give different responses?
-Is it even a legitimate move for it to give up?
+variable names.
+Is it even a legitimate move for it to give up? Why would the solver give different responses?
 
-Before you get mad at the solver, let me explain why it can
-unexpectedly fail with a seemingly innocuous query change.
-As mentioned earlier, the SMT solver sticks to precise
-mathematical reasoning, meaning that it should never give
-any bogus answer. Consequently, when it sees hard questions,
-it is allowed to give up. How hard? Well, some questions can
+Before you get mad at the solver (this is a made-up example
+BTW), let me explain why it can unexpectedly fail with a
+seemingly innocuous query change. As mentioned earlier, the
+SMT solver sticks to precise mathematical reasoning.
+Therefore, if a best-effort try doesn't work out, the solver
+is allowed to give up, instead of giving bogus answers.
+Moreover, the solver heuristics may not be robust against
+superficial modifications to the input, leading to 
+confusing responses on similar inquiries.
+
+<!-- How hard? Well, some questions can
 be NP-hard! In fact, the example above pertains to
 [Diophantine
 equations](https://en.wikipedia.org/wiki/Diophantine_equation),
 which are undecidable in general. Therefore, no program can
 correctly answer all such questions. The poor solver has to
 resort to heuristics, which may not be robust against
-superficial modifications to the input query.
+superficial modifications to the input query. -->
 
 <!-- ### Instability of SMT Solving -->
 
@@ -137,9 +144,11 @@ this section.
 As programmers, we often make informal claims about our
 software. For example, I might say that a filesystem is
 crash-safe or an encryption software is secure, etc. However, as
-many of us can testify, these claims can sometimes be
-unfounded or even straight-up wrong. Fortunately, formal
-verification offers a path to move beyond informal claims.
+many of us can testify, these claims might be
+unfounded or even straight-up wrong. Sometimes, the cost of software failure can be catastrophic (e.g., consider [spacecrafts](https://en.wikipedia.org/wiki/Ariane_flight_V88) or [medical devices](https://en.wikipedia.org/wiki/Therac-25)).
+Fortunately, formal
+verification offers a path to move beyond informal claims and avoid such
+disasters.
 
 Formal verification uses proofs to show that the code meets
 its specification. In comparison to testing, formal
@@ -327,12 +336,12 @@ verification artifacts available online.
 
 | Project Name  | Source Line Count   | Query Count | Artifact Solver |
 |:------------- | -----------:| -----------:|:-----------:|
-| Komodo\\(_D \\)     | 26K        |  2,054 | Z3 4.5.0 |
-| Komodo\\(_S \\)     | 4K         |  773   | Z3 4.2.2 |
-| VeriBetrKV\\(_D \\) | 44K        |  5,325 | Z3 4.6.0 |
-| VeriBetrKV\\(_L \\) | 49K        |  5,600 | Z3 4.8.5 |
-| Dice\\(_F^⋆\\)      | 25K        |  1,536 | Z3 4.8.5 |
-| vWasm\\(_F \\)     | 15K         |  1,755 | Z3 4.8.5 |
+| Komodo\\(_D \\) [(SOSP'17)](https://dl.acm.org/doi/10.1145/3132747.3132782) | 26K        |  2,054 | Z3 4.5.0 |
+| Komodo\\(_S \\) [(SOSP'19)](https://dl.acm.org/doi/10.1145/3341301.3359641) | 4K         |  773   | Z3 4.2.2 |
+| VeriBetrKV\\(_D \\) [(OSDI'20)](https://www.usenix.org/conference/osdi20/presentation/hance) | 44K        |  5,325 | Z3 4.6.0 |
+| VeriBetrKV\\(_L \\) [(OOPSLA'22)](https://dl.acm.org/doi/10.1145/3527313) | 49K        |  5,600 | Z3 4.8.5 |
+| Dice\\(_F^⋆\\) [(USENIX'21)](https://www.usenix.org/conference/usenixsecurity21/presentation/tao) | 25K        |  1,536 | Z3 4.8.5 |
+| vWasm\\(_F \\) [(USENIX'22)](https://www.usenix.org/conference/usenixsecurity22/presentation/bosamiya) | 15K         |  1,755 | Z3 4.8.5 |
 
 <!-- | Project Name  | Source Line Count   | Query Count |
 |:------------- | -----------:| -----------:|
@@ -380,13 +389,12 @@ stable. The solver version used for each project’s artifact is marked with a s
 <br>
 
 Now that we know instability is not a rare occurrence, the
-next question is: what gives? Rather than blaming it all on
-undecidability, let's try to be more specific about the
-causes. Instability is a property that is jointly determined
-by the solver and the query. Therefore, the causes can
-roughly be categorized as solver-related and query-related.
-Of course, I cannot possibly be exhaustive here, so let me
-discuss the significant ones we have found for each side. 
+next question is: what gives? Well, first off, instability
+is a property that is jointly determined by the solver and
+the query. Therefore, the causes can roughly be categorized
+as solver-related and query-related. Of course, I cannot
+possibly be exhaustive here, so let me discuss the
+significant ones we have found for each side. 
 
 <!-- Before we delve into the details, here is a disclaimer: I
 can only cover significant causes   -->
@@ -525,14 +533,14 @@ vWasm\\(_F\\) also starts off with more relevant context
 originally. Therefore, the stability of vWasm\\(_F\\) can be
 explained by the manual tuning done by the developers. -->
 
-| Project Name  | Stable Count  | Core Preservation | Unstable Count  | Core Mitigation | 
+| Project Name  | Stable Count  | Core Preservation Count | Unstable Count  | Core Mitigation Count | 
 |:------------- | -----------:| -----------:|-----------:|-----------:|
-| Komodo\\(_D \\)     | 1,914      |  99.4% |  93  | 90.3%|
-| VeriBetrKV\\(_D \\) | 4,983      |  99.5% | 172  | 64.5%|
-| VeriBetrKV\\(_L \\) | 4,999      |  99.6% | 256  | 83.6%|
-| Dice\\(_F^⋆\\)      | 1,483      |  99.6% |  20  | 90.0%|
-| vWasm\\(_F \\)      | 1,731      |  99.7% |   4  |  0.0%|
-| Overall             | 15,110     |  99.5% | 545  | 78.3%|
+| Komodo\\(_D \\)     | 1,914      |  1,902 (99.4%) |  93  |  84 (90.3%)|
+| VeriBetrKV\\(_D \\) | 4,983      |  4,958 (99.5%) | 172  | 111 (64.5%)|
+| VeriBetrKV\\(_L \\) | 4,999      |  4,979 (99.6%) | 256  | 214 (83.6%)|
+| Dice\\(_F^⋆\\)      | 1,483      |  1,477 (99.6%) |  20  |  18 (90.0%)|
+| vWasm\\(_F \\)      | 1,731      |  1,726 (99.7%) |   4  |   0 (0.0%)|
+| Overall             | 15,110     |  15,042 (99.5%) | 545  | 427 (78.3%)|
 
 Generally, the core is highly likely to preserve what is
 stable. Moreover, across all projects, \\(78.3\\%\\) of the
