@@ -12,18 +12,12 @@ areas = ["Artificial Intelligence", "Graphics", "Programming Languages", "Securi
 tags = ["foobar", "cache-invalidation"]
 
 [extra]
-# For the author field, you can decide to not have a url.
-# If so, simply replace the set of author fields with the name string.
-# For example:
-#   author = "Harry Bovik"
-# However, adding a URL is strongly preferred
 author = {name = "Your Name Here", url = "YOUR HOME PAGE URL HERE" }
-# The committee specification is simply a list of strings.
-# However, you can also make an object with fields like in the author.
+# The committee specification is  a list of objects similar to the author.
 committee = [
-    "Committee Member 1's Full Name",
-    "Committee Member 2's Full Name",
     {name = "Harry Q. Bovik", url = "http://www.cs.cmu.edu/~bovik/"},
+    {name = "Committee Member 2's Full Name", url = "Committee Member 2's page"},
+    {name = "Committee Member 3's Full Name", url = "Committee Member 3's page"}
 ]
 +++
 
