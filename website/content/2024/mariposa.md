@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Mariposa: the Butterfly Effect in SMT-based Program Verification"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-08-07
+date = 2024-08-06
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
