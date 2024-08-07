@@ -152,7 +152,7 @@ example,
 ![i are serious cat](https://upload.wikimedia.org/wikipedia/commons/4/44/CatLolCatExample.jpg)
 
 Of course, it is good etiquette to add alt-text to your images, like
-<!-- has been done in the previous image, with "i are serious cat". It -->
+has been done in the previous image, with "i are serious cat". It
 helps with accessibility.
 
 Images are automatically shown at a reasonable size by limiting their

@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Mariposa: the Butterfly Effect in SMT-based Program Verification"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-07-28
+date = 2024-08-07
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -21,9 +21,9 @@ author = {name = "Yi Zhou", url = "https://yizhou7.github.io/" }
 # The committee specification is simply a list of strings.
 # However, you can also make an object with fields like in the author.
 committee = [
-    "Giulia Fanti",
-    "Ruben Martins",
-    "Long Pham",
+    {name = "Giulia Fanti", url = "https://www.ece.cmu.edu/directory/bios/fanti-giulia.html"},
+    {name = "Ruben Martins", url = "https://sat-group.github.io/ruben/"},
+    {name = "Long Pham", url = "https://www.cs.cmu.edu/~longp/"},
 ]
 +++
 
