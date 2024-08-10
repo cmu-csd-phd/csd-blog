@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Oblivious Maps for Trusted Execution Environments"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-08-01
+date = 2024-08-05
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
