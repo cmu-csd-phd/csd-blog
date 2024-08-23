@@ -21,6 +21,9 @@ build_search_index = true
 generate_feed = true
 
 [markdown]
+extra_syntaxes = ["syntaxes"]
+# in case zola gets updated
+extra_syntaxes_and_themes = ["syntaxes"]
 # Enable syntax highlighting
 highlight_code = true
 highlight_theme = "zenburn"
