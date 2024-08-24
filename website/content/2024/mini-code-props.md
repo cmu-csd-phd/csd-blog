@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "miniCodeProps: a Benchmark for Proving Code Properties"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-05-20
+date = 2024-08-23
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -18,7 +18,7 @@ tags = ["theorem-proving", "formal-methods", "lean"]
 # For example:
 #   author = "Harry Bovik"
 # However, adding a URL is strongly preferred
-author = {name = "Evan Lohn", url = "www.evanlohn.com" }
+author = {name = "Evan Lohn", url = "https://www.evanlohn.com" }
 # The committee specification is simply a list of strings.
 # However, you can also make an object with fields like in the author.
 committee = [
