@@ -9,9 +9,9 @@ tags = ["database systems", "compiler optimization", "query optimization", "quer
 [extra]
 author = {name = "Sam Arch", url = "www.samarch.xyz" }
 committee = [
-    {name = "Harry Q. Bovik", url = "http://www.cs.cmu.edu/~bovik/"},
-    {name = "Committee Member 2's Full Name", url = "Committee Member 2's page"},
-    {name = "Committee Member 3's Full Name", url = "Committee Member 3's page"}
+    {name = "Wan Shen Lim", url = "https://wanshenl.me/"},
+    {name = "Phillip Gibbons", url = "https://www.cs.cmu.edu/~gibbons/"},
+    {name = "Dimitrios Skarlatos", url = "https://www.cs.cmu.edu/~dskarlat/"}
 ]
 +++
 
