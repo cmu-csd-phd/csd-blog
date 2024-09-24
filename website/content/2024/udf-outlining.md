@@ -41,17 +41,41 @@ A customer is a VIP if the total amount of money spent
 on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 </em></p>
 
-# RBAR Execution
+# Row-By-Agonizing-Row (RBAR) Execution
+
+![Figure 3: UDF Example.](rbar.png)
+<p style="text-align: left;">
+<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of UDFs:</b>
+<em>
+UDFs are opaque functions written in a non-declarative paradigm that 
+the query optimizer cannot reason about effectively.
+As a result, the DBMS executes UDFs Row-By-Agonizing-Row (RBAR), invoking the 
+UDF for every row of the outer query. In our example, the <b>is_vip</b> UDF
+is invoked for each row of the <b>customer</b> table. Each time the UDF is invoked, 
+the embedded <b>SELECT</b> statement is executed, which scans every row of the
+<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer|×|order|)</b>, which is unreasonably slow to execute. 
+</em></p>
 
 # UDF Inlining (Intuition)
+
+![Figure 4: UDF Inlining Intuition.](intuition.png)
+<p style="text-align: left;">
+<b>Figure 4, UDF Inlining Intuition:</b>
+<em>
+The underwhelming performance of UDFs arises because they are opaque, non-SQL 
+functions that the DBMS must call RBAR. Another SQL construct, SQL subqueries, are
+logically executed RBAR, where for each row of the outer query, the subquery is evaluated. However, the key distinction between UDF calls and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by 
+the subquery, leaving the query entirely in SQL, in a form that is amenable to 
+effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
+</em></p>
 
 # Subquery Unnesting
 
 # UDF Inlining
 
-![Figure 3: UDF Inlining.](inlining.png)
+![Figure 4: UDF Inlining.](inlining.png)
 <p style="text-align: left;">
-<b>Figure 3, UDF Inlining:</b>
+<b>Figure 4, UDF Inlining:</b>
 <em>
 UDF inlining automatically removes all UDF calls by replacing
 them with equivalent SQL subqueries. Inlining
