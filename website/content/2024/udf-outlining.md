@@ -27,7 +27,9 @@ The query optimizer takes a SQL query as input and produces a query plan
  (a concrete execution strategy to evaluate the query) as output. The goal of the query optimizer is to select the fastest executing query plan. It achieves this by enumerating the space of equivalent query plans (the plan space) and using a cost model to estimate the runtime cost of each candidate plan.
 </em></p>
 
-However, a large number of SQL queries make calls to User-Defined Functions (UDFs) which are procedural functions written in non-SQL programming languages such as Python or PL/SQL. Since UDFs are procedural (non-declarative) functions, they are opaque and the query optimizer cannot reason about them, leading to slow, inefficient query plans.
+# User-Defined Functions (UDFs)
+
+Billions of SQL queries per day make calls to User-Defined Functions (UDFs) which are procedural functions written in non-SQL programming languages such as Python or PL/SQL. Since UDFs are procedural (non-declarative) functions, they are opaque and the query optimizer cannot reason about them, leading to slow, inefficient query plans.
 
 ![Figure 2: UDF Example.](udf.png)
 <p style="text-align: left;">
@@ -39,6 +41,14 @@ A customer is a VIP if the total amount of money spent
 on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 </em></p>
 
+# RBAR Execution
+
+# UDF Inlining (Intuition)
+
+# Subquery Unnesting
+
+# UDF Inlining
+
 ![Figure 3: UDF Inlining.](inlining.png)
 <p style="text-align: left;">
 <b>Figure 3, UDF Inlining:</b>
@@ -49,10 +59,24 @@ leaves queries entirely in SQL which the query optimizer can effectively reason 
 by multiple orders of magnitude.
 </em></p>
 
-# UDF Inlining
+# The Problem with UDF Inlining
 
-# UDF Outlining
+Unnesting Table
+
+# Our Solution: UDF Outlining
+
+PRISM Diagram
+
+Outlining
+
+Instruction Elimination
+
+Subquery Elision
 
 # Experiments
+
+Unnesting
+
+Overall Speedup
 
 # Conclusion
