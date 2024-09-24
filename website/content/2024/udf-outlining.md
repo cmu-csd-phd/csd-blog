@@ -53,7 +53,7 @@ As a result, the DBMS executes UDFs Row-By-Agonizing-Row (RBAR), invoking the
 UDF for every row of the outer query. In our example, the <b>is_vip</b> UDF
 is invoked for each row of the <b>customer</b> table. Each time the UDF is invoked, 
 the embedded <b>SELECT</b> statement is executed, which scans every row of the
-<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer|×|order|)</b>, which is unreasonably slow to execute. 
+<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer|×|orders|)</b>, which is unreasonably slow to execute. 
 </em></p>
 
 # UDF Inlining (Intuition)
@@ -73,9 +73,9 @@ effective query optimization. Translating UDFs to SQL subqueries is the key intu
 
 # UDF Inlining
 
-![Figure 4: UDF Inlining.](inlining.png)
+![Figure 6: UDF Inlining.](inlining.png)
 <p style="text-align: left;">
-<b>Figure 4, UDF Inlining:</b>
+<b>Figure 6, UDF Inlining:</b>
 <em>
 UDF inlining automatically removes all UDF calls by replacing
 them with equivalent SQL subqueries. Inlining
@@ -85,7 +85,18 @@ by multiple orders of magnitude.
 
 # The Problem with UDF Inlining
 
-Unnesting Table
+![Figure 7: Subquery Unnesting (ProcBench).](cant-unnest.png)
+<p style="text-align: left;">
+<b>Figure 7, Subquery Unnesting (ProcBench):</b>
+<em>
+To achieve significant performance improvements with UDF inlining, the generated 
+subquery must be unnested by the DBMS. To understand how often this occurs, we
+ran the Microsoft SQL ProcBench, a UDF-centric benchmark containing 15 queries 
+modelled after real-world customer queries. On SQL Server, only 4 out of 15 of the 
+queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBench
+ queries have underwhelming performance (RBAR). DuckDB supports arbitrary unnesting
+  and can unnest all 15 queries after inlining.
+</em></p>
 
 # Our Solution: UDF Outlining
 
