@@ -53,7 +53,7 @@ As a result, the DBMS executes UDFs Row-By-Agonizing-Row (RBAR), invoking the
 UDF for every row of the outer query. In our example, the <b>is_vip</b> UDF
 is invoked for each row of the <b>customer</b> table. Each time the UDF is invoked, 
 the embedded <b>SELECT</b> statement is executed, which scans every row of the
-<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer|×|orders|)</b>, which is unreasonably slow to execute. 
+<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer| × |orders|)</b>, which is unreasonably slow to execute. 
 </em></p>
 
 # UDF Inlining (Intuition)
@@ -68,6 +68,16 @@ Another SQL language feature, SQL subqueries, are also execute RBAR, where for e
 </em></p>
 
 # Subquery Unnesting
+
+![Figure 5: Subquery Unnesting.](subquery.png)
+<p style="text-align: left;">
+<b>Figure 5, Subquery Unnesting:</b>
+<em>
+The database research community has spent decades developed optimization techniques, to efficiently evaluate SQL queries with subqueries. Subquery unnesting is performed by the DBMSs query optimizer and rewrites the query to replace the subquery with equivalent join operators. On the left hand side, the SQL query evaluates a subquery (shown in red)
+for each row of the <b>orders</b> table, which will rescan the <b>customer</b> table,
+each time the UDF is invoked, resulting in a runtime of <b>Θ(|customer| × |orders|)</b>. However, after the DBMS performs subquery unnesting,
+the query is rewritten as shown on the right hand side. The DBMS replaced the subquery
+with a join, enabling the rewritten query to be evaluated efficiently in <b>Θ(|customer| + |orders|)</b> with hash joins.</em></p>
 
 # UDF Inlining
 
@@ -100,16 +110,38 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 PRISM Diagram
 
-Region-Based Outlining
+Region-Based UDF Outlining
 
 Instruction Elimination
 
 Subquery Elision
 
-# Experiments
+PRISM-Optimized UDF
 
-Unnesting
+# Experimental Setup
 
-Overall Speedup
+# Experiments (Unnesting)
+
+![Figure 11: Subquery Unnesting (ProcBench).](unnest.png)
+<p style="text-align: left;">
+<b>Figure 11, Subquery Unnesting (ProcBench):</b>
+<em>
+When inlining entire UDFs, SQL Server unnests only 4 out of 15 queries in the
+Microsoft SQL ProcBench. After optimizing the UDF, PRISM hides the irrelevant
+pieces of the UDF through outlining, only exposing the relevant pieces of the
+UDF to the query optimizer. As a consequence, queries become significantly simpler,
+and SQL Server can unnest 12 out of 15 queries in the benchmark. DuckDB can
+unnest arbitrary subqueries, with the DBMS unnesting all 15 queries with both approaches.
+</em></p>
+
+# Experiments (Overall Speedup)
+
+![Figure 12: Overall Speedup (ProcBench).](speedup.png)
+<p style="text-align: left;">
+<b>Figure 12, Overall Speedup (ProcBench):</b>
+<em>
+To understand the performance improvement of PRISM, compared to inlining the entire UDF,
+we report the overall speedup when running queries with PRISM toggled. Speedup is calculated by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM. We report the average speedup (excluding outliers), and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
+</em></p>
 
 # Conclusion
