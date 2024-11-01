@@ -24,7 +24,7 @@ SQL is the defacto query language for interacting with databases. Since SQL is a
 <b>Figure 1, The Query Optimizer:</b>
 <em>
 The query optimizer takes a SQL query as input and produces a query plan
- (a concrete execution strategy to evaluate the query) as output. The goal of the query optimizer is to select the query plan without the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space) and using a cost model to estimate the runtime cost of each candidate plan.
+ (a concrete execution strategy to evaluate the query) as output. The goal of the query optimizer is to select the query plan with the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space) and uses a cost model to estimate the runtime cost of each candidate plan.
 </em></p>
 
 # User-Defined Functions (UDFs)
@@ -64,7 +64,7 @@ the embedded <b>SELECT</b> statement is executed, which scans every row of the
 <em>
 The underwhelming performance of UDFs arises because they are opaque, non-declarative 
 functions that the DBMS cannot reason about it, leading to RBAR execution. 
-Another SQL language feature, SQL subqueries, are also execute RBAR, where for each row of the outer query, the subquery is re-evaluated. However, the key distinction between UDFs and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by  the subquery, leaving the query entirely in SQL, in a form that is amenable to effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
+Another SQL language feature, SQL subqueries, also execute RBAR, where for each row of the outer query, the subquery is re-evaluated. However, the key distinction between UDFs and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by  the subquery, leaving the query entirely in SQL, in a form that is amenable to effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
 </em></p>
 
 # Subquery Unnesting
@@ -108,15 +108,29 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 # Our Solution: UDF Outlining
 
-PRISM Diagram
+![Figure 8: PRISM.](prism.png)
+<p style="text-align: left;">
+<b>Figure 8, PRISM:</b>
+<em>
+</em></p>
 
-Region-Based UDF Outlining
+![Figure 9: Region-Based UDF Outlining.](outlining.png)
+<p style="text-align: left;">
+<b>Figure 9, Region-Based UDF Outlining:</b>
+<em>
+</em></p>
 
-Instruction Elimination
+![Figure 10: Instruction Elimination.](instruction.png)
+<p style="text-align: left;">
+<b>Figure 10, Instruction Elimination:</b>
+<em>
+</em></p>
 
-Subquery Elision
-
-PRISM-Optimized UDF
+![Figure 11: Subquery Elision.](elision.png)
+<p style="text-align: left;">
+<b>Figure 11, Subquery Elision:</b>
+<em>
+</em></p>
 
 # Experimental Setup
 
