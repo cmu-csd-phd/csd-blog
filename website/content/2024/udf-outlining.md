@@ -89,11 +89,20 @@ effective query optimization. The process of translating UDFs to equivalent SQL 
 <p style="text-align: left;">
 <b>Figure 5, Subquery Unnesting:</b>
 <em>
-The database research community has spent decades developed optimization techniques, to efficiently evaluate SQL queries with subqueries. Subquery unnesting is performed by the DBMSs query optimizer and rewrites the query to replace the subquery with equivalent join operators. On the left hand side, the SQL query evaluates a subquery (shown in red)
-for each row of the <b>orders</b> table, which will rescan the <b>customer</b> table,
-each time the UDF is invoked, resulting in a runtime of <b>Θ(|customer| × |orders|)</b>. However, after the DBMS performs subquery unnesting,
-the query is rewritten as shown on the right hand side. The DBMS replaced the subquery
-with a join, enabling the rewritten query to be evaluated efficiently in <b>Θ(|customer| + |orders|)</b> with hash joins.</em></p>
+An illustration of how DBMSs perform subquery unnesting. The SQL query is rewritten
+from an inefficient query containing a subquery, to an equivalent query containing joins that is significant faster to execute.
+</em></p>
+
+The database research community has spent decades developing optimization techniques, to 
+efficiently evaluate SQL queries with subqueries. Subquery unnesting is performed by the 
+DBMS's query optimizer, replacing subqueries with equivalent join operators.
+
+On the left hand side of Figure 5 is a SQL query containing a subquery (shown in red).
+The naive way of evaluating the query is by re-evaluating the subquery for each row of 
+the <b>orders</b> table, and rescanning the <b>customer</b> table. Evaluating the query in tihs manner results in a runtime of <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient.
+
+Instead of evaluating subqueries in a naive "row-by-row" manner, database systems perform subquery unnesting. Subquery unnesting replaces the subquery with equivalent join operators. The right hand side of Figure 5 illustrate the rewritten query,
+which the DBMS evaluates efficiently in <b>Θ(|customer| + |orders|)</b> time with hash joins.
 
 # UDF Inlining
 
@@ -101,11 +110,20 @@ with a join, enabling the rewritten query to be evaluated efficiently in <b>Θ(|
 <p style="text-align: left;">
 <b>Figure 6, UDF Inlining:</b>
 <em>
-UDF inlining automatically removes all UDF calls by replacing
-them with equivalent SQL subqueries. Inlining
-leaves queries entirely in SQL which the query optimizer can effectively reason about. As a result, UDF inlining can improve the performance of UDF-centric queries
-by multiple orders of magnitude.
+An illustration of the UDF inlining technique for our motivating example.
+The <b>is_vip</b> UDF is translated into an equivalent SQL subquery with <b>LATERAL</b> joins. The generated subquery is then "inlined" into the calling query.
+After inlining, the query is represented entirely in SQL, which the DBMS can optimize 
+effectively.
 </em></p>
+
+UDF inlining translates UDFs into equivalent SQL subqueries in three key steps. First,
+a UDF's statements are translated to SQL statements. <b>IF/ELSE</b> blocks become 
+<b>CASE WHEN</b> statements, assignments (i.e., <b>x = y</b>) become projections (i.e.,<b>SELECT y AS x</b>).
+Then, the DBMS chains together these statements with <b>LATERAL</b> joins, creating a
+ single SQL expression which is equivalent to the original UDF. The last step, is to 
+ "inline" the generated SQL expression into the calling query, eliminating the UDF call.
+  After applying UDF inlining, queries are represented in pure SQL, automatically
+improving the performance of queries with UDFs by multiple orders of magnitude.
 
 # The Problem with UDF Inlining
 
