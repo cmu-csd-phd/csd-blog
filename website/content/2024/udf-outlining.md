@@ -136,9 +136,9 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 # Experiments (Unnesting)
 
-![Figure 11: Subquery Unnesting (ProcBench).](unnest.png)
+![Figure 12: Subquery Unnesting (ProcBench).](unnest.png)
 <p style="text-align: left;">
-<b>Figure 11, Subquery Unnesting (ProcBench):</b>
+<b>Figure 12, Subquery Unnesting (ProcBench):</b>
 <em>
 When inlining entire UDFs, SQL Server unnests only 4 out of 15 queries in the
 Microsoft SQL ProcBench. After optimizing the UDF, PRISM hides the irrelevant
@@ -150,9 +150,9 @@ unnest arbitrary subqueries, with the DBMS unnesting all 15 queries with both ap
 
 # Experiments (Overall Speedup)
 
-![Figure 12: Overall Speedup (ProcBench).](speedup.png)
+![Figure 13: Overall Speedup (ProcBench).](speedup.png)
 <p style="text-align: left;">
-<b>Figure 12, Overall Speedup (ProcBench):</b>
+<b>Figure 13, Overall Speedup (ProcBench):</b>
 <em>
 To understand the performance improvement of PRISM, compared to inlining the entire UDF,
 we report the overall speedup when running queries with PRISM toggled. Speedup is calculated by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM. We report the average speedup (excluding outliers), and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
