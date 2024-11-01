@@ -132,26 +132,24 @@ improving the performance of queries with UDFs by multiple orders of magnitude.
 <p style="text-align: left;">
 <b>Figure 7, UDF Inlining = Complex Queries:</b>
 <em>
-To achieve significant performance improvements with UDF inlining, the generated 
-subquery must be unnested by the DBMS. However, UDF inlining produces complex queries,
-containing subqueries and <b>LATERAL</b> joins. As a result, the DBMS cannot perform
-subquery unnesting, and the subquery is evaluated naviely for each row. In effect,
-the DBMS evaluates the subquery RBAR, in the same way that the UDF call was performed
-without inlining.
+
 </em></p>
+
+Unfortunately, UDF inlining is ineffective for most real world queries, because it produces large, complex SQL queries that are hard to optimize. In particular, to achieve significant performance improvements with UDF inlining, the DBMS must unnest the generated subquery. However, UDF inlining produces complex subqueries containing <b>LATERAL</b> joins that DBMSs fail to unnest. As a result, the DBMS evaluates the subquery naively for each row, akin to the RBAR execution strategy used before applying UDF inlining.
 
 ![Figure 8: Subquery Unnesting (ProcBench).](cant-unnest.png)
 <p style="text-align: left;">
 <b>Figure 8, Subquery Unnesting (ProcBench):</b>
 <em>
-To achieve significant performance improvements with UDF inlining, the generated 
-subquery must be unnested by the DBMS. To understand how often this occurs, we
+To understand how often DBMSs unnest subqueries generated with UDF inlining occurs, we
 ran the Microsoft SQL ProcBench, a UDF-centric benchmark containing 15 queries 
-modelled after real-world customer queries. On SQL Server, only 4 out of 15 of the 
+modelled after real-world customer queries. A green tick indicates that the given DBMS performed subquery unnesting. A grey cross indicates that subquery unnesting was not performed. On SQL Server, only 4 out of 15 of the 
 queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBench
  queries have underwhelming performance (RBAR). DuckDB supports arbitrary unnesting
   and can unnest all 15 queries after inlining.
 </em></p>
+
+
 
 # Our Solution: UDF Outlining
 
