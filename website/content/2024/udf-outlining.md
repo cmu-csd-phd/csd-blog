@@ -17,7 +17,7 @@ committee = [
 
 # Background
 
-SQL is the defacto query language for interacting with databases. Since SQL is a declarative programming language, users express the intended result of their query rather than the concrete procedural steps to produce the query result. Database management systems (DBMSs) find fast execution strategies for SQL queries using a component called the query optimizer. The optimizer's task is to search the space of equivalent query plans (specific procedural strategies to retrieve the result of a query) and select the plan with the lowest estimated runtime cost. After decades of research on query optimization, database systems have become remarkably effective at optimizing SQL queries.
+SQL is the defacto query language for interacting with databases. Since SQL is declarative, users express the intended result of their query rather than the concrete procedural steps to produce the query result. Database management systems (DBMSs) find fast execution strategies for SQL queries using a component called the query optimizer. The optimizer's task is to search the space of equivalent query plans (specific procedural strategies to retrieve the result of a query) and select the plan with the lowest estimated runtime cost. After decades of research on query optimization, database systems have become remarkably effective at optimizing SQL queries.
 
 ![Figure 1: Query Optimizer.](optimizer.png)
 <p style="text-align: left;">
@@ -29,7 +29,7 @@ The query optimizer takes a SQL query as input and produces a query plan
 
 # User-Defined Functions (UDFs)
 
-Although most queries are written purely in SQL, billions of queries per day make calls to User-Defined Functions (UDFs), procedural functions written in non-SQL programming languages such as Python or PL/SQL. Since UDFs are procedural, non-declarative functions, they are opaque to the query optimizer, making them challenging to reason about, and leading to slow, inefficient query plans.
+Although most database queries are written purely in SQL, billions of queries per day make calls to User-Defined Functions (UDFs), procedural functions written in non-SQL programming languages such as Python or PL/SQL. 
 
 ![Figure 2: UDF Example.](udf.png)
 <p style="text-align: left;">
@@ -41,20 +41,29 @@ A customer is a VIP if the total amount of money spent
 on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 </em></p>
 
+Figure 2 showcases an example PL/SQL UDF, <b>is_vip</b>, which 
+returns whether a customer is a VIP. The <b>is_vip</b> UDF mixes declarative code
+(the <b>SELECT</b> statement) and procedural code (<b>IF/ELSE</b> statements). Allowing
+users to mix procedural and declarative code provides a more convenient and intuitive means to express query logic compared to pure SQL. As a result, UDFs provide significant software engineering benefits to database users, namely the ability to reuse code, express query logic more concisely, and decompose complex queries into modular functions.
+
 # Row-By-Agonizing-Row (RBAR) Execution
 
-![Figure 3: UDF Example.](rbar.png)
+![Figure 3: Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs.](rbar.png)
 <p style="text-align: left;">
-<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of UDFs:</b>
+<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs:</b>
 <em>
-UDFs are opaque functions written in a non-declarative paradigm that 
-the query optimizer cannot reason about effectively.
-As a result, the DBMS executes UDFs Row-By-Agonizing-Row (RBAR), invoking the 
-UDF for every row of the outer query. In our example, the <b>is_vip</b> UDF
-is invoked for each row of the <b>customer</b> table. Each time the UDF is invoked, 
-the embedded <b>SELECT</b> statement is executed, which scans every row of the
-<b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer| × |orders|)</b>, which is unreasonably slow to execute. 
+An example query which invokes the <b>is_vip</b> UDF from Figure 2. The DBMS naively evaluates the UDF for each input row of the <b>customer</b> table. Each UDF call executes an embedded <b>SELECT</b> statement that scans the <b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer| × |orders|)</b>, which is unreasonably slow to execute. As a result, users in the database community, have collectively described UDF execution as RBAR (Row-By-Agonizing-Row).
 </em></p>
+
+Unfortunately, UDFs come with a performance cost. Unlike SQL, which is purely declarative, UDFs mix declarative and procedural programming paradigms,
+making them opaque to the query optimizer. As a result, the DBMS must execute
+UDFs in a naive "row-by-row" fashion, where the UDF is reinvoked for each input row.
+In the process, <b>SELECT</b> statements embedded inside the UDF are re-evaluated
+for each row, dramatically slowing down query execution. Database practitioners have
+termed this naive, inefficient, row-by-row execution of UDFs as RBAR (Row-By-Agonizing-Row).
+
+Figure 3 showcases an example query invoking the <b>is_vip</b> UDF from Figure 2. The
+UDF is evaluated RBAR, where for each row of the <b>customer</b> table, the UDF is called. With each call to the UDF, the embedded <b>SELECT</b> statement is executed, re-scanning the <b>orders</b> table and leading to extremely inefficient, RBAR, query execution.
 
 # UDF Inlining (Intuition)
 
