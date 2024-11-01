@@ -17,19 +17,19 @@ committee = [
 
 # Background
 
-SQL is the defacto query language for interacting with database systems. Since SQL is a declarative programming language, users express the intended result of their query rather than the concrete procedural steps to produce the query result. Database systems execute SQL efficiently by using a component called the query optimizer. The optimizer's task is to search the space of equivalent query plans (specific procedural strategies to retrieve the result of a query) for a given SQL query and select the plan with the lowest estimated cost. After decades of research on query optimization, database systems have become remarkably good at executing SQL queries efficiently.
+SQL is the defacto query language for interacting with databases. Since SQL is a declarative programming language, users express the intended result of their query rather than the concrete procedural steps to produce the query result. Database management systems (DBMSs) find fast execution strategies for SQL queries using a component called the query optimizer. The optimizer's task is to search the space of equivalent query plans (specific procedural strategies to retrieve the result of a query) and select the plan with the lowest estimated runtime cost. After decades of research on query optimization, database systems have become remarkably effective at optimizing SQL queries.
 
 ![Figure 1: Query Optimizer.](optimizer.png)
 <p style="text-align: left;">
 <b>Figure 1, The Query Optimizer:</b>
 <em>
 The query optimizer takes a SQL query as input and produces a query plan
- (a concrete execution strategy to evaluate the query) as output. The goal of the query optimizer is to select the fastest executing query plan. It achieves this by enumerating the space of equivalent query plans (the plan space) and using a cost model to estimate the runtime cost of each candidate plan.
+ (a concrete execution strategy to evaluate the query) as output. The goal of the query optimizer is to select the query plan without the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space) and using a cost model to estimate the runtime cost of each candidate plan.
 </em></p>
 
 # User-Defined Functions (UDFs)
 
-Billions of SQL queries per day make calls to User-Defined Functions (UDFs) which are procedural functions written in non-SQL programming languages such as Python or PL/SQL. Since UDFs are procedural (non-declarative) functions, they are opaque and the query optimizer cannot reason about them, leading to slow, inefficient query plans.
+Although most queries are written purely in SQL, billions of queries per day make calls to User-Defined Functions (UDFs), procedural functions written in non-SQL programming languages such as Python or PL/SQL. Since UDFs are procedural, non-declarative functions, they are opaque to the query optimizer, making them challenging to reason about, and leading to slow, inefficient query plans.
 
 ![Figure 2: UDF Example.](udf.png)
 <p style="text-align: left;">
@@ -62,11 +62,9 @@ the embedded <b>SELECT</b> statement is executed, which scans every row of the
 <p style="text-align: left;">
 <b>Figure 4, UDF Inlining Intuition:</b>
 <em>
-The underwhelming performance of UDFs arises because they are opaque, non-SQL 
-functions that the DBMS must call RBAR. Another SQL construct, SQL subqueries, are
-logically executed RBAR, where for each row of the outer query, the subquery is evaluated. However, the key distinction between UDF calls and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by 
-the subquery, leaving the query entirely in SQL, in a form that is amenable to 
-effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
+The underwhelming performance of UDFs arises because they are opaque, non-declarative 
+functions that the DBMS cannot reason about it, leading to RBAR execution. 
+Another SQL language feature, SQL subqueries, are also execute RBAR, where for each row of the outer query, the subquery is re-evaluated. However, the key distinction between UDFs and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by  the subquery, leaving the query entirely in SQL, in a form that is amenable to effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
 </em></p>
 
 # Subquery Unnesting
@@ -102,7 +100,7 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 PRISM Diagram
 
-Outlining
+Region-Based Outlining
 
 Instruction Elimination
 
