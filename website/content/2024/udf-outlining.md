@@ -63,7 +63,7 @@ for each row, dramatically slowing down query execution. Database practitioners 
 termed this naive, inefficient, row-by-row execution of UDFs as RBAR (Row-By-Agonizing-Row).
 
 Figure 3 showcases an example query invoking the <b>is_vip</b> UDF from Figure 2. The
-UDF is evaluated RBAR, where for each row of the <b>customer</b> table, the UDF is called. With each call to the UDF, the embedded <b>SELECT</b> statement is executed, re-scanning the <b>orders</b> table and leading to extremely inefficient, RBAR, query execution.
+UDF is evaluated RBAR, where for each row of the <b>customer</b> table, the UDF is called. With each call to the UDF, the embedded <b>SELECT</b> statement is executed, re-scanning the <b>orders</b> table and leading to extremely inefficient query execution.
 
 # UDF Inlining (Intuition)
 
@@ -71,10 +71,17 @@ UDF is evaluated RBAR, where for each row of the <b>customer</b> table, the UDF 
 <p style="text-align: left;">
 <b>Figure 4, UDF Inlining Intuition:</b>
 <em>
-The underwhelming performance of UDFs arises because they are opaque, non-declarative 
-functions that the DBMS cannot reason about it, leading to RBAR execution. 
-Another SQL language feature, SQL subqueries, also execute RBAR, where for each row of the outer query, the subquery is re-evaluated. However, the key distinction between UDFs and subqueries, is that the database community has spent decades optimizing subqueries. Hence, if a UDF can be translated into an equivalent SQL subquery, the UDF call can be replaced by  the subquery, leaving the query entirely in SQL, in a form that is amenable to effective query optimization. Translating UDFs to SQL subqueries is the key intuition behind UDF inlining.
+The key intuition behind UDF inlining is to translate UDFs from opaque functions into SQL subqueries, a declarative representation that the DBMS can optimize effectively. In the above example, the <b>is_vip</b> UDF is replaced by an equivalent SQL subquery.
 </em></p>
+
+RBAR execution of UDFs arises because UDFs are opaque functions written in a 
+non-declarative paradigm that the DBMS cannot effectively reason about. Such row-by-row
+execution is reminiscent of how database systems logically evaluate SQL subqueries, 
+whereby a subquery is re-evaluated for each row of the calling query. The key 
+distinction, however, between UDFs and subqueries, is that the database community has 
+spent decades optimizing subqueries. Hence, if the DBMS can translate a UDF into an 
+equivalent SQL subquery, the query is then left entirely in SQL, which is amenable to 
+effective query optimization. The process of translating UDFs to equivalent SQL subqueries is known as <b>UDF inlining</b>, and enables the efficient execution of queries containing UDFs.
 
 # Subquery Unnesting
 
@@ -102,9 +109,22 @@ by multiple orders of magnitude.
 
 # The Problem with UDF Inlining
 
-![Figure 7: Subquery Unnesting (ProcBench).](cant-unnest.png)
+
+![Figure 7: UDF Inlining = Complex Queries.](skull.png)
 <p style="text-align: left;">
-<b>Figure 7, Subquery Unnesting (ProcBench):</b>
+<b>Figure 7, UDF Inlining = Complex Queries:</b>
+<em>
+To achieve significant performance improvements with UDF inlining, the generated 
+subquery must be unnested by the DBMS. However, UDF inlining produces complex queries,
+containing subqueries and <b>LATERAL</b> joins. As a result, the DBMS cannot perform
+subquery unnesting, and the subquery is evaluated naviely for each row. In effect,
+the DBMS evaluates the subquery RBAR, in the same way that the UDF call was performed
+without inlining.
+</em></p>
+
+![Figure 8: Subquery Unnesting (ProcBench).](cant-unnest.png)
+<p style="text-align: left;">
+<b>Figure 8, Subquery Unnesting (ProcBench):</b>
 <em>
 To achieve significant performance improvements with UDF inlining, the generated 
 subquery must be unnested by the DBMS. To understand how often this occurs, we
@@ -117,27 +137,27 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 # Our Solution: UDF Outlining
 
-![Figure 8: PRISM.](prism.png)
+![Figure 9: PRISM.](prism.png)
 <p style="text-align: left;">
-<b>Figure 8, PRISM:</b>
+<b>Figure 9, PRISM:</b>
 <em>
 </em></p>
 
-![Figure 9: Region-Based UDF Outlining.](outlining.png)
+![Figure 10: Region-Based UDF Outlining.](outlining.png)
 <p style="text-align: left;">
-<b>Figure 9, Region-Based UDF Outlining:</b>
+<b>Figure 10, Region-Based UDF Outlining:</b>
 <em>
 </em></p>
 
-![Figure 10: Instruction Elimination.](instruction.png)
+![Figure 11: Instruction Elimination.](instruction.png)
 <p style="text-align: left;">
-<b>Figure 10, Instruction Elimination:</b>
+<b>Figure 11, Instruction Elimination:</b>
 <em>
 </em></p>
 
-![Figure 11: Subquery Elision.](elision.png)
+![Figure 12: Subquery Elision.](elision.png)
 <p style="text-align: left;">
-<b>Figure 11, Subquery Elision:</b>
+<b>Figure 12, Subquery Elision:</b>
 <em>
 </em></p>
 
@@ -145,9 +165,9 @@ queries could be unnested after inlining. Therefore, 11 out of 15 of the ProcBen
 
 # Experiments (Unnesting)
 
-![Figure 12: Subquery Unnesting (ProcBench).](unnest.png)
+![Figure 13: Subquery Unnesting (ProcBench).](unnest.png)
 <p style="text-align: left;">
-<b>Figure 12, Subquery Unnesting (ProcBench):</b>
+<b>Figure 13, Subquery Unnesting (ProcBench):</b>
 <em>
 When inlining entire UDFs, SQL Server unnests only 4 out of 15 queries in the
 Microsoft SQL ProcBench. After optimizing the UDF, PRISM hides the irrelevant
@@ -159,9 +179,9 @@ unnest arbitrary subqueries, with the DBMS unnesting all 15 queries with both ap
 
 # Experiments (Overall Speedup)
 
-![Figure 13: Overall Speedup (ProcBench).](speedup.png)
+![Figure 14: Overall Speedup (ProcBench).](speedup.png)
 <p style="text-align: left;">
-<b>Figure 13, Overall Speedup (ProcBench):</b>
+<b>Figure 14, Overall Speedup (ProcBench):</b>
 <em>
 To understand the performance improvement of PRISM, compared to inlining the entire UDF,
 we report the overall speedup when running queries with PRISM toggled. Speedup is calculated by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM. We report the average speedup (excluding outliers), and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
