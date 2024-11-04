@@ -195,8 +195,18 @@ To illustrate PRISM's optimizations, we will apply its three relevant optimizati
 <p style="text-align: left;">
 <b>Figure 10, Region-Based UDF Outlining:</b>
 <em>Instead of inlining the entire UDF, PRISM extracts the largest regions of non-<b>SELECT</b> code into separate outlined functions. In our example,
-PRISM extracts the <b>IF/ELSE</b> block and <b>RETURN</b> statements into an outlined function <b>f(...)</b>, which is opaque to the query optimizer.
+PRISM extracts the <b>IF/ELSE</b> block and <b>RETURN</b> statement into an outlined function <b>f(...)</b>, which is opaque to the query optimizer.
 </em></p>
+
+The first and most critical optimization that PRISM performs is region-based UDF outlining. The goal of UDF outlining is to extract the largest blocks of unhelpful code 
+for query optimization into separate functions that are opaque to the DBMS. PRISM achieves this by representing a UDF as a hierarchy of program <b>regions</b>,
+where each region is eligible for outlining. PRISM identifies the largest regions of UDF code that do not contain any <b>SELECT</b> statements and extracts each
+region into a separate outlined function. PRISM then compiles the outlined functions to machine code, preventing the inlining of that region. Lastly, PRISM replaces the
+region in the original UDF with an opaque function call into the outlined function, simplifying the UDF substantially.
+
+Figure 10 illustrates how PRISM applies region-based UDF outlining to our motivating example. First, PRISM identifies the region containing the <b>IF/ELSE</b> block and <b>RETURN</b> statement as the largest region not containing <b>SELECT</b> statements. Next, it extracts the region into a new outlined function <b>f(...)</b>, compiles it to machine code,
+and replaces the original region with an opaque function call to the outlined function. Through UDF outlining, PRISM significantly simplifies the UDF,
+ enabling more effective query optimization.
 
 # Instruction Elimination
 
