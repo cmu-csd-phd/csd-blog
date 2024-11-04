@@ -218,6 +218,14 @@ PRISM eliminates the definition of <b>total</b>, directly forwarding its definit
 <em>
 </em></p>
 
+PRISM then applies instruction elimination, eliminating as many redundant instructions in the UDF as possible. PRISM achieves this by replacing a variable's uses
+with its definition, making the variable definition redundant. PRISM then deletes the definition. 
+PRISM eliminates redundant instructions through instruction elimination, minimizing the number of <b>LATERAL</b> joins generated from inlining.
+
+Figure 11 showcases PRISM's application of instruction elimination to our motivating example. PRISM identifies <b>total</b> as a program variable
+and replaces its use in <b>f(...)</b> with its definition. Since <b>total</b> no longer has any uses, PRISM eliminates its defining instruction, collapsing the
+UDF to a single <b>RETURN</b> statement.
+
 # Subquery Elision
 
 ![Figure 12: Subquery Elision.](elision.png)
