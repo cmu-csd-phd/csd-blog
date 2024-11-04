@@ -11,7 +11,7 @@ author = {name = "Sam Arch", url = "www.samarch.xyz" }
 committee = [
     {name = "Wan Shen Lim", url = "https://wanshenl.me/"},
     {name = "Phillip Gibbons", url = "https://www.cs.cmu.edu/~gibbons/"},
-    {name = "Dimitrios Skarlatos", url = "https://www.cs.cmu.edu/~dskarlat/"}
+    {name = "Jonathan Aldrich", url = "https://www.cs.cmu.edu/~aldrich/"}
 ]
 +++
 
@@ -235,7 +235,20 @@ UDF to a single <b>RETURN</b> statement.
  PRISM performs subquery elision and injects the return value into the calling query rather than substituting it as a SQL subquery.
 </em></p>
 
+Lastly, PRISM runs subquery elision to eliminate redundant subqueries from the resulting query. Inlining translates UDFs into subqueries, which complicates
+query optimization. However, PRISM elides the subquery when a UDF consists of a single <b>RETURN</b> statement (as is the case for our motivating example, shown in Figure 12).
+Instead, it directly substitutes the original UDF call with the return value. PRISM simplifies the UDF through its optimizations,
+oftentimes leaving the resulting query free of <b>LATERAL</b> joins, resulting in more effective query optimization and faster query plans.
+
+
 # Experimental Setup
+
+We performed our evaluation on a machine with a dual-socket 20-core Intel Xeon Gold 5218R CPU (20 cores per CPU, 2× HT), 192 GB DDR4 RAM, and a 960 GB NVMe SSD.
+We use the default index configuration for all workloads and build additional column-store indexes on every table on SQL Server. For each DBMS, we tune their configuration
+ knobs to improve performance, pre-warm the buffer pool, and refresh statistics. We perform two warmup runs of each query and then five hot runs (with minimal observed variance), 
+ reporting the average execution time of the five runs.
+
+<b>SQL ProcBench</b>: Microsoft released the SQL ProcBench in 2021 as the first UDF-centric benchmark modeled after real-world UDFs on Azure SQL Server. ProcBench is based on the TPC-DS benchmark and contains 24 queries that invoke scalar UDFs. We use a scale factor of 10 (≈10 GB). We run 15 of the 24 queries, ignoring queries that use table-valued functions (TVFs) or UDFs invoked from stored procedures.
 
 # Experiments (Unnesting)
 
@@ -243,13 +256,19 @@ UDF to a single <b>RETURN</b> statement.
 <p style="text-align: left;">
 <b>Figure 13, Subquery Unnesting (ProcBench):</b>
 <em>
-When inlining entire UDFs, SQL Server unnests only 4 out of 15 queries in the
-Microsoft SQL ProcBench. After optimizing the UDF, PRISM hides the irrelevant
-pieces of the UDF through outlining, only exposing the relevant pieces of the
-UDF to the query optimizer. As a consequence, queries become significantly simpler,
-and SQL Server can unnest 12 out of 15 queries in the benchmark. DuckDB can
-unnest arbitrary subqueries, with the DBMS unnesting all 15 queries with both approaches.
+ A table indicating whether a given DBMS (SQL Server or DuckDB) successfully unnested a UDF-centric query
+from the Microsoft SQL ProcBench with a given technique (inlining or PRISM). A green tick indicates that the unnesting succeeded.
+ A grey cross indicates that the unnesting failed. 
 </em></p>
+
+The principle issue with UDF inlining is that it produces complex subqueries with <b>LATERAL</b> joins
+that most DBMSs cannot unnest, resulting in inefficient RBAR execution. By comparison, PRISM only exposes
+the UDF pieces that improve query optimization, resulting in significantly simpler and faster queries.
+As shown in Figure 13, SQL Server can unnest only 4 out of 15 of the ProcBench queries after applying UDF inlining.
+Yet with PRISM, SQL Server can unnest 12 of the 15 queries, leading to efficient query execution with joins
+rather than inefficient RBAR execution. As expected, DuckDB can unnest all 15 queries with both techniques,
+as it supports arbitrary unnesting of subqueries. In summary, PRISM significantly improves
+subquery unnesting compared to naively inlining the entire UDF.
 
 # Experiments (Overall Speedup)
 
@@ -257,8 +276,20 @@ unnest arbitrary subqueries, with the DBMS unnesting all 15 queries with both ap
 <p style="text-align: left;">
 <b>Figure 14, Overall Speedup (ProcBench):</b>
 <em>
-To understand the performance improvement of PRISM, compared to inlining the entire UDF,
-we report the overall speedup when running queries with PRISM toggled. Speedup is calculated by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM. We report the average speedup (excluding outliers), and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
+A table indicating the overall speedup on the Microsoft SQL ProcBench when running queries with PRISM over inlining the entire UDF.
+We calculate speedup by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM.
+We report the average speedup (excluding outliers) and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
 </em></p>
 
+Figure 14 details the average and maximum speedup of the ProcBench queries when running PRISM. We observe that, on average, PRISM attains an average speedup of 298.7× due to 8 of the 15 ProcBench queries now evaluating efficiently with joins after successful unnesting rather than RBAR. The maximum speedup for SQL Server is 2997.9×, again due to more effective unnesting,
+for a query that spends the entirety of its execution time in the UDF call. DuckDB can unnest arbitrary queries. Therefore, PRISM offers a more modest average speedup of 1.29× due to 
+eliminating <b>LATERAL</b> joins from the query plan. Lastly, PRISM delivers a maximum speedup of 2270.2×, as the query after UDF inlining is so complex, that even after unnesting,
+the DBMS picks an inefficient query plan with a large cross-product.  In contrast, the generated query is substantially simpler with PRISM,  leading to an efficient plan evaluated with 
+hash joins. PRISM significantly improves SQL Server and DuckDB compared to inlining entire UDFs due to more straightforward, more efficient query plans.
+
 # Conclusion
+
+The database community developed UDF inlining to translate entire  UDFs to SQL for more effective query optimization. We observe that inlining entire UDFs leads to complex, obfuscated queries that are challenging for DBMSs to optimize effectively. Instead, we propose UDF inlining, a new technique, to extract regions of code irrelevant for query optimization into opaque functions intentionally hidden from the DBMS. We implement our approach with four complementary optimizations in PRISM, our  UDF-centric optimizing compiler. 
+By generating simpler queries, We observe that on the Microsoft SQL ProcBench, PRISM provides dramatic performance improvements over inlining entire UDFs.
+
+Our paper has been accepted for publication in VLDB 2025.
