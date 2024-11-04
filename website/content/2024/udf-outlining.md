@@ -17,18 +17,18 @@ committee = [
 
 # Background
 
-SQL is the de facto query language used to interact with databases. Since SQL is declarative, users express the intended result of their query rather than the concrete procedural steps to produce the answer. Database management systems (DBMSs) find fast execution strategies for SQL queries using a component called the query optimizer. The optimizer’s task is to search the space of equivalent query plans  (specific procedural strategies to retrieve the result of a query) and select the plan with the lowest estimated runtime cost. After decades of research on query optimization, database systems have become remarkably effective at optimizing SQL queries.
+SQL is the de facto query language used to interact with databases. Since SQL is declarative, users express the intended result of their query rather than the concrete procedural steps to produce the answer. Database management systems (DBMSs) find fast execution strategies for SQL queries using a component called the [query optimizer](https://www.vldb.org/pvldb/vol9/p204-leis.pdf). The optimizer’s task is to search the space of equivalent query plans  (specific procedural strategies to retrieve the result of a query) and select the plan with the lowest estimated runtime cost. After decades of research on query optimization, database systems have become remarkably effective at optimizing SQL queries.
 
 ![Figure 1: Query Optimizer.](optimizer.png)
 <p style="text-align: left;">
 <b>Figure 1, The Query Optimizer:</b>
 <em>
-The query optimizer takes a SQL query as input and produces a query plan (a concrete execution strategy to evaluate the query) as output. The query optimizer aims to select the query plan with the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space) and using a cost model to estimate the runtime cost of each candidate plan.
+The query optimizer takes a SQL query as input and produces a query plan (a concrete execution strategy to evaluate the query) as output. The query optimizer aims to select the query plan with the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space) and a cost model to estimate the runtime cost of each candidate plan.
 </em></p>
 
 # User-Defined Functions (UDFs)
 
-Although most database queries are written purely in SQL, billions of queries per day make calls to User-Defined Functions (UDFs), procedural functions written in non-SQL programming languages such as Python or PL/SQL. 
+Although most database queries are written purely in SQL, [billions of queries per day make calls to User-Defined Functions (UDFs)](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf), procedural functions written in non-SQL programming languages such as Python or PL/SQL. 
 
 ![Figure 2: UDF Example.](udf.png)
 <p style="text-align: left;">
@@ -43,23 +43,27 @@ on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 Figure 2 showcases an example PL/SQL UDF, <b>is_vip</b>, which 
 returns whether a customer is a VIP. The <b>is_vip</b> UDF mixes declarative code
 (the <b>SELECT</b> statement) and procedural code (<b>IF/ELSE</b> statements). Allowing
-users to mix procedural and declarative code provides a more convenient and intuitive way to express query logic than pure SQL. As a result, UDFs provide significant software engineering benefits to database users, namely the ability to reuse code, express query logic more concisely, and decompose complex queries into modular functions.
+users to mix procedural and declarative code provides a more convenient and intuitive way
+to express query logic than pure SQL. As a result, UDFs provide
+[significant software engineering benefits](https://learn.microsoft.com/en-us/sql/relational-databases/user-defined-functions/user-defined-functions?view=sql-server-ver16)
+ to database users, namely the ability to reuse code, express query logic more concisely, 
+and decompose complex queries into modular functions.
 
 # Row-By-Agonizing-Row (RBAR) Execution
-
-![Figure 3: Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs.](rbar.png)
-<p style="text-align: left;">
-<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs:</b>
-<em>
-An example query which invokes the <b>is_vip</b> UDF from Figure 2. The DBMS naively evaluates the UDF for each input row of the <b>customer</b> table. Each UDF call executes an embedded <b>SELECT</b> statement that scans the <b>orders</b> table. As a result, the complexity of the query is <b>Θ(|customer| × |orders|)</b>, which is unreasonably slow to execute. As a result, users in the database community have collectively described UDF execution as RBAR (Row-By-Agonizing-Row).
-</em></p>
 
 Unfortunately, UDFs come with a performance cost. Unlike SQL, which is purely declarative, UDFs mix declarative and procedural programming paradigms,
 making them opaque to the query optimizer. As a result, the DBMS must execute
 UDFs in a naive "row-by-row" fashion, where the UDF is reinvoked for each input row.
 In the process, <b>SELECT</b> statements embedded inside the UDF are re-evaluated
 for each row, dramatically slowing down query execution. Database practitioners have
-termed this naive, inefficient, row-by-row execution of UDFs as RBAR (Row-By-Agonizing-Row).
+termed this naive, inefficient, row-by-row execution of UDFs as [RBAR (Row-By-Agonizing-Row)](https://www.red-gate.com/simple-talk/databases/sql-server/t-sql-programming-sql-server/rbar-row-by-agonizing-row/).
+
+![Figure 3: Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs.](rbar.png)
+<p style="text-align: left;">
+<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs:</b>
+<em>
+An example query invoking the <b>is_vip</b> UDF from Figure 2. The DBMS naively evaluates the UDF for each input row of the <b>customer</b> table. Each UDF call executes an embedded <b>SELECT</b> statement that scans the <b>orders</b> table. The query's runtime complexity is <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient.
+</em></p>
 
 Figure 3 showcases an example query invoking the <b>is_vip</b> UDF from Figure 2.
 The DBMS invokes the UDF RBAR, calling the UDF for each row of the <b>customer</b> table.
@@ -79,10 +83,11 @@ non-declarative paradigm that the DBMS cannot effectively reason about. Such row
 execution is reminiscent of how database systems logically evaluate SQL subqueries, 
 whereby the DBMS re-evaluates a subquery for each row of the calling query. The key 
 distinction, however, between UDFs and subqueries is that the database community has 
-spent decades optimizing subqueries. Hence, if the DBMS can translate a UDF into an 
+spent [decades optimizing subqueries](https://materialize.com/blog/decorrelation-subquery-optimization/).
+Hence, if the DBMS could translate a UDF into an 
 equivalent SQL subquery, the query is left entirely in SQL, which is amenable to 
-effective query optimization. Translating UDFs to equivalent SQL subqueries is\
-known as <b>UDF inlining</b>, and enables the efficient execution of queries containing UDFs.
+effective query optimization. Translating UDFs to equivalent SQL subqueries is 
+known as [<b>UDF inlining</b>](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf), and enables the efficient execution of queries containing UDFs.
 
 # Subquery Unnesting
 
@@ -103,7 +108,7 @@ The naive way of evaluating the query is by re-evaluating the subquery for each 
 the <b>orders</b> table and rescanning the <b>customer</b> table. Evaluating the query in
 this manner results in a runtime of <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient.
 
-Instead of evaluating subqueries in a naive "row-by-row" manner, database systems perform subquery unnesting.
+Instead of evaluating subqueries in a naive "row-by-row" manner, database systems perform [subquery unnesting](https://materialize.com/blog/decorrelation-subquery-optimization/).
 Subquery unnesting replaces the subquery with equivalent join operators. The right-hand side of Figure 5 illustrates the rewritten query,
 which the DBMS evaluates efficiently in <b>Θ(|customer| + |orders|)</b> time with hash joins.
 
@@ -120,17 +125,21 @@ After inlining, the query is represented entirely in SQL, which the DBMS can opt
 effectively.
 </em></p>
 
-UDF inlining translates UDFs into equivalent SQL subqueries in three key steps. First,
+[UDF inlining](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf) translates UDFs into equivalent SQL subqueries in three key steps. First,
 inlining translates a UDF's statements to SQL tables. <b>IF/ELSE</b> blocks become 
 <b>CASE WHEN</b> statements, assignments (i.e., <b>x = y</b>) become projections (i.e., <b>SELECT y AS x</b>).
 Then, the DBMS chains together these statements with <b>LATERAL</b> joins, creating a
  single SQL expression that is equivalent to the original UDF. The last step is to 
  "inline" the generated SQL expression into the calling query, eliminating the UDF call.
   After applying UDF inlining, queries are represented in pure SQL, automatically
-improving the performance of queries with UDFs by multiple orders of magnitude.
+improving the performance of queries with UDFs by [multiple orders of magnitude](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf).
 
 # The Problem with UDF Inlining
 
+Unfortunately, UDF inlining is [ineffective](https://www.cidrdb.org/cidr2024/papers/p13-franz.pdf) for most real-world queries because it produces large,
+ complex SQL queries that are hard to optimize. In particular, to achieve significant performance improvements with UDF inlining, 
+the DBMS must unnest the generated subquery. Yet, UDF inlining produces complex subqueries containing <b>LATERAL</b> joins that [most DBMSs fail to unnest](https://www.cidrdb.org/cidr2024/papers/p13-franz.pdf).
+ As a result, the DBMS evaluates the subquery naively for each row, akin to the RBAR execution strategy used before applying UDF inlining.
 
 ![Figure 7: UDF Inlining = Complex Queries.](skull.png)
 <p style="text-align: left;">
@@ -140,7 +149,6 @@ The complex query produced by UDF inlining. Most DBMSs cannot unnest the generat
 falling back to slow, inefficient RBAR execution.
 </em></p>
 
-Unfortunately, UDF inlining is ineffective for most real-world queries because it produces large, complex SQL queries that are hard to optimize. In particular, to achieve significant performance improvements with UDF inlining, the DBMS must unnest the generated subquery. Yet, UDF inlining produces complex subqueries containing <b>LATERAL</b> joins that most DBMSs fail to unnest. As a result, the DBMS evaluates the subquery naively for each row, akin to the RBAR execution strategy used before applying UDF inlining.
 
 ![Figure 8: Subquery Unnesting (ProcBench).](cant-unnest.png)
 <p style="text-align: left;">
@@ -151,22 +159,24 @@ query from the Microsoft SQL ProcBench. A green tick indicates that the unnestin
  indicates that the unnesting failed.
 </em></p>
 
-To understand how effectively DBMSs optimize queries with UDFs, we ran the Microsoft 
-SQL ProcBench, a UDF-centric benchmark containing 15 queries 
+To understand how effectively DBMSs optimize queries with UDFs, we ran the [Microsoft 
+SQL ProcBench](http://www.vldb.org/pvldb/vol14/p1378-ramachandra.pdf), a UDF-centric benchmark containing 15 queries 
 modeled after real-world customer queries. We evaluated these queries on two DBMSs:
 Microsoft SQL Server and DuckDB. A query executes efficiently only if the DBMS can 
 unnest the subquery generated by UDF inlining otherwise the DBMS evaluates it RBAR. 
 SQL Server unnests only 4 out of 15 of the queries after inlining. Alternatively stated,
 SQL Server evaluates 11 out of 15 of the ProcBench queries RBAR, with underwhelming 
 performance. Hence, for most real-world UDF-centric queries, inlining is
-ineffective on SQL Server. Although DuckDB supports arbitrary unnesting of subqueries and achieves
-high performance on all 15 queries, only a handful of DBMSs implement this technique,
+ineffective on SQL Server. Although DuckDB supports
+[arbitrary unnesting of subqueries](https://subs.emis.de/LNI/Proceedings/Proceedings241/383.pdf) and achieves
+high performance on all 15 queries, only a [handful of DBMSs implement this technique](https://www.cidrdb.org/cidr2024/papers/p13-franz.pdf),
 and integrating it into existing systems is highly challenging. Hence,
-for the majority of UDF-centric queries, inlining is not effective for the vast majority of DBMSs.
+for the majority of UDF-centric queries, inlining is
+ [ineffective for the vast majority of DBMSs](https://www.cidrdb.org/cidr2024/papers/p13-franz.pdf).
 
 # Our Solution: UDF Outlining
 
-Fundamentally, we observe that inlining <b>entire UDFs</b> generates complex subqueries that are challenging for the DBMS
+Fundamentally, we observe that inlining <b>entire UDFs</b> results in complex subqueries that are challenging for the DBMS
 to unnest. Instead of inlining entire UDFs, a better approach is to analyze the UDF, deconstruct it into smaller pieces, and 
 inline only the  pieces that help query optimization. To achieve this, we propose <b>UDF outlining</b>, an optimization technique 
 that extracts UDF code fragments into separate functions that are intentionally not inlined, minimizing UDF code complexity. 
@@ -187,9 +197,14 @@ PRISM is an acronym for the five UDF-centric optimizations that it supports:
 4. <b>S</b>ubquery Elision
 5. Query <b>M</b>otion
 
-To illustrate PRISM's optimizations, we will apply its three relevant optimizations to our motivating example.
+To illustrate PRISM's optimizations, we illustrate the changes that occur when applying the three relevant optimizations to our motivating example.
 
 # Region-Based UDF Outlining
+
+The first and most critical optimization that PRISM performs is region-based UDF outlining. The goal of UDF outlining is to extract the largest blocks of unhelpful code 
+for query optimization into separate functions that are opaque to the DBMS. PRISM achieves this by representing a UDF as [a hierarchy of program regions](https://dl.acm.org/doi/pdf/10.1145/178243.178258), where each region is eligible for outlining. PRISM identifies the largest regions of UDF code that do not contain any <b>SELECT</b> statements and extracts each
+region into a separate outlined function. PRISM then compiles the outlined functions to machine code, preventing the inlining of the corresponding region. Lastly, PRISM replaces the
+region in the original UDF with an opaque function call into the outlined function, simplifying the UDF substantially.
 
 ![Figure 10: Region-Based UDF Outlining.](outlining.png)
 <p style="text-align: left;">
@@ -198,17 +213,15 @@ To illustrate PRISM's optimizations, we will apply its three relevant optimizati
 PRISM extracts the <b>IF/ELSE</b> block and <b>RETURN</b> statement into an outlined function <b>f(...)</b>, which is opaque to the query optimizer.
 </em></p>
 
-The first and most critical optimization that PRISM performs is region-based UDF outlining. The goal of UDF outlining is to extract the largest blocks of unhelpful code 
-for query optimization into separate functions that are opaque to the DBMS. PRISM achieves this by representing a UDF as a hierarchy of program <b>regions</b>,
-where each region is eligible for outlining. PRISM identifies the largest regions of UDF code that do not contain any <b>SELECT</b> statements and extracts each
-region into a separate outlined function. PRISM then compiles the outlined functions to machine code, preventing the inlining of that region. Lastly, PRISM replaces the
-region in the original UDF with an opaque function call into the outlined function, simplifying the UDF substantially.
-
 Figure 10 illustrates how PRISM applies region-based UDF outlining to our motivating example. First, PRISM identifies the region containing the <b>IF/ELSE</b> block and <b>RETURN</b> statement as the largest region not containing <b>SELECT</b> statements. Next, it extracts the region into a new outlined function <b>f(...)</b>, compiles it to machine code,
 and replaces the original region with an opaque function call to the outlined function. Through UDF outlining, PRISM significantly simplifies the UDF,
  enabling more effective query optimization.
 
 # Instruction Elimination
+
+PRISM then applies instruction elimination, eliminating as many redundant instructions in the UDF as possible. PRISM achieves this by replacing a variable's uses
+with its definition, making the variable definition redundant. PRISM then deletes the definition. 
+PRISM eliminates redundant instructions through instruction elimination, minimizing the number of <b>LATERAL</b> joins generated from inlining.
 
 ![Figure 11: Instruction Elimination.](instruction.png)
 <p style="text-align: left;">
@@ -218,15 +231,16 @@ PRISM eliminates the definition of <b>total</b>, directly forwarding its definit
 <em>
 </em></p>
 
-PRISM then applies instruction elimination, eliminating as many redundant instructions in the UDF as possible. PRISM achieves this by replacing a variable's uses
-with its definition, making the variable definition redundant. PRISM then deletes the definition. 
-PRISM eliminates redundant instructions through instruction elimination, minimizing the number of <b>LATERAL</b> joins generated from inlining.
-
 Figure 11 showcases PRISM's application of instruction elimination to our motivating example. PRISM identifies <b>total</b> as a program variable
 and replaces its use in <b>f(...)</b> with its definition. Since <b>total</b> no longer has any uses, PRISM eliminates its defining instruction, collapsing the
 UDF to a single <b>RETURN</b> statement.
 
 # Subquery Elision
+
+Lastly, PRISM runs subquery elision to eliminate redundant subqueries from the resulting query. Inlining translates UDFs into subqueries, which complicates
+query optimization. However, PRISM elides the subquery when a UDF consists of a single <b>RETURN</b> statement (as is the case for our motivating example, shown in Figure 12).
+Instead, it directly substitutes the original UDF call with the return value. PRISM simplifies the UDF through its optimizations,
+oftentimes leaving the resulting query free of <b>LATERAL</b> joins, resulting in more effective query optimization and faster query plans.
 
 ![Figure 12: Subquery Elision.](elision.png)
 <p style="text-align: left;">
@@ -234,11 +248,6 @@ UDF to a single <b>RETURN</b> statement.
 <em>In our example, PRISM reduces the UDF to a single <b>RETURN</b> statement after instruction elimination. When a UDF consists of a single <b>RETURN</b> statement,
  PRISM performs subquery elision and injects the return value into the calling query rather than substituting it as a SQL subquery.
 </em></p>
-
-Lastly, PRISM runs subquery elision to eliminate redundant subqueries from the resulting query. Inlining translates UDFs into subqueries, which complicates
-query optimization. However, PRISM elides the subquery when a UDF consists of a single <b>RETURN</b> statement (as is the case for our motivating example, shown in Figure 12).
-Instead, it directly substitutes the original UDF call with the return value. PRISM simplifies the UDF through its optimizations,
-oftentimes leaving the resulting query free of <b>LATERAL</b> joins, resulting in more effective query optimization and faster query plans.
 
 
 # Experimental Setup
@@ -248,7 +257,7 @@ We use the default index configuration for all workloads and build additional co
  knobs to improve performance, pre-warm the buffer pool, and refresh statistics. We perform two warmup runs of each query and then five hot runs (with minimal observed variance), 
  reporting the average execution time of the five runs.
 
-<b>SQL ProcBench</b>: Microsoft released the SQL ProcBench in 2021 as the first UDF-centric benchmark modeled after real-world UDFs on Azure SQL Server. ProcBench is based on the TPC-DS benchmark and contains 24 queries that invoke scalar UDFs. We use a scale factor of 10 (≈10 GB). We run 15 of the 24 queries, ignoring queries that use table-valued functions (TVFs) or UDFs invoked from stored procedures.
+<b>SQL ProcBench</b>: Microsoft released the [SQL ProcBench](http://www.vldb.org/pvldb/vol14/p1378-ramachandra.pdf) in 2021 as the first UDF-centric benchmark modeled after real-world UDFs on Azure SQL Server. ProcBench is based on the TPC-DS benchmark and contains 24 queries that invoke scalar UDFs. We use a scale factor of 10 (≈10 GB). We run 15 of the 24 queries, ignoring queries that use table-valued functions (TVFs) or UDFs invoked from stored procedures.
 
 # Experiments (Unnesting)
 
@@ -283,13 +292,12 @@ We report the average speedup (excluding outliers) and the maximum speedup (incl
 
 Figure 14 details the average and maximum speedup of the ProcBench queries when running PRISM. We observe that, on average, PRISM attains an average speedup of 298.7× due to 8 of the 15 ProcBench queries now evaluating efficiently with joins after successful unnesting rather than RBAR. The maximum speedup for SQL Server is 2997.9×, again due to more effective unnesting,
 for a query that spends the entirety of its execution time in the UDF call. DuckDB can unnest arbitrary queries. Therefore, PRISM offers a more modest average speedup of 1.29× due to 
-eliminating <b>LATERAL</b> joins from the query plan. Lastly, PRISM delivers a maximum speedup of 2270.2×, as the query after UDF inlining is so complex, that even after unnesting,
-the DBMS picks an inefficient query plan with a large cross-product.  In contrast, the generated query is substantially simpler with PRISM,  leading to an efficient plan evaluated with 
-hash joins. PRISM significantly improves SQL Server and DuckDB compared to inlining entire UDFs due to more straightforward, more efficient query plans.
+eliminating <b>LATERAL</b> joins from the query plan. Lastly, PRISM delivers a maximum speedup of 2270.2× on DuckDB, as the query after UDF inlining is so complex, that even after unnesting, the DBMS picks an inefficient query plan with a large cross-product.  In contrast, the generated query is substantially simpler with PRISM,  leading to an efficient plan 
+evaluated with hash joins. PRISM significantly improves SQL Server and DuckDB compared to inlining entire UDFs due by generating simpler, queries that are easier to optimize.
 
 # Conclusion
 
-The database community developed UDF inlining to translate entire  UDFs to SQL for more effective query optimization. We observe that inlining entire UDFs leads to complex, obfuscated queries that are challenging for DBMSs to optimize effectively. Instead, we propose UDF inlining, a new technique, to extract regions of code irrelevant for query optimization into opaque functions intentionally hidden from the DBMS. We implement our approach with four complementary optimizations in PRISM, our  UDF-centric optimizing compiler. 
-By generating simpler queries, We observe that on the Microsoft SQL ProcBench, PRISM provides dramatic performance improvements over inlining entire UDFs.
+The database community developed UDF inlining to translate entire  UDFs to SQL for more effective query optimization. We observe that inlining entire UDFs leads to complex, obfuscated queries that are challenging for DBMSs to optimize effectively. Instead, we propose UDF outlining a new technique that extracts regions of code irrelevant for query optimization into opaque functions intentionally hidden from the DBMS. We implement our approach with four complementary optimizations in PRISM, our  UDF-centric optimizing compiler. 
+By generating simpler queries, we observe that on the Microsoft SQL ProcBench, PRISM provides dramatic performance improvements over inlining entire UDFs.
 
 Our paper has been accepted for publication in VLDB 2025.
