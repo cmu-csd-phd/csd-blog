@@ -194,14 +194,17 @@ To illustrate PRISM's optimizations, we will apply its three relevant optimizati
 ![Figure 10: Region-Based UDF Outlining.](outlining.png)
 <p style="text-align: left;">
 <b>Figure 10, Region-Based UDF Outlining:</b>
-<em>
+<em>Instead of inlining the entire UDF, PRISM extracts the largest regions of non-<b>SELECT</b> code into separate outlined functions. In our example,
+PRISM extracts the <b>IF/ELSE</b> block and <b>RETURN</b> statements into an outlined function <b>f(...)</b>, which is opaque to the query optimizer.
 </em></p>
 
 # Instruction Elimination
 
 ![Figure 11: Instruction Elimination.](instruction.png)
 <p style="text-align: left;">
-<b>Figure 11, Instruction Elimination:</b>
+<b>Figure 11, Instruction Elimination:</b> After UDF outlining, PRISM applies instruction elimination to remove as many UDF instructions as possible, reducing 
+the number of <b>LATERAL</b> joins from inlining. Instruction elimination replaces the uses of a variable with its definitions. In our example,
+PRISM eliminates the definition of <b>total</b>, directly forwarding its definition to the use by <b>f(...)</b>.
 <em>
 </em></p>
 
@@ -210,7 +213,8 @@ To illustrate PRISM's optimizations, we will apply its three relevant optimizati
 ![Figure 12: Subquery Elision.](elision.png)
 <p style="text-align: left;">
 <b>Figure 12, Subquery Elision:</b>
-<em>
+<em>In our example, PRISM reduces the UDF to a single <b>RETURN</b> statement after instruction elimination. When a UDF consists of a single <b>RETURN</b> statement,
+ PRISM performs subquery elision and injects the return value into the calling query rather than substituting it as a SQL subquery.
 </em></p>
 
 # Experimental Setup
