@@ -71,7 +71,7 @@ With each call to the UDF, the DBMS executes the embedded <b>SELECT</b> statemen
 
 # UDF Inlining: Intuition
 
-<img src="intuition.png" alt="Figure 4: UDF Inlining Intuition." width="70%" />
+<img src="intuition.png" alt="Figure 4: UDF Inlining Intuition." width="80%" />
 <p style="text-align: left;">
 <b>Figure 4, UDF Inlining Intuition:</b>
 <em>
