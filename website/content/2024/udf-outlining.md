@@ -23,16 +23,23 @@ SQL is the de facto query language used to interact with databases. Since SQL is
 <p style="text-align: left;">
 <b>Figure 1, The Query Optimizer:</b>
 <em>
-The query optimizer takes a SQL query (<b>SELECT ...</b>) as input and produces a query plan (a concrete execution strategy to evaluate the query) as output. The query optimizer aims to select the query plan with the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space), estimating each operator's cardinalities, and estimating each candidate plan's runtime cost.
+The query optimizer takes a SQL query (<b>SELECT ...</b>) as input and produces a query plan (shown on the right-hand side) as output. The query optimizer aims to select the query plan with the lowest estimated cost. It achieves this by enumerating the space of equivalent query plans (the plan space), estimating each operator's cardinalities, and estimating each candidate plan's runtime cost.
 </em></p>
 
 # User-Defined Functions (UDFs)
 
 Although most database queries are written purely in SQL, [billions of queries per day make calls to User-Defined Functions (UDFs)](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf), procedural functions written in non-SQL programming languages such as Python or PL/SQL. 
 
-<img src="udf.png" alt="Figure 2: UDF Example." width="70%" />
+<img src="rbar.png" alt="Figure 2: An example query invoking a PL/SQL UDF." width="70%" />
 <p style="text-align: left;">
-<b>Figure 2, An Example UDF:</b>
+<b>Figure 2, An example query invoking a PL/SQL UDF:</b>
+<em>
+The query computes for each <b>customer</b>, their name, and whether they are a VIP.
+</em></p>
+
+<img src="udf.png" alt="Figure 3: UDF Example." width="70%" />
+<p style="text-align: left;">
+<b>Figure 3, An Example UDF:</b>
 <em>
 An example UDF written in PL/SQL. The function <b>is_vip</b>
 takes a customer key as input and returns whether the customer is a VIP.
@@ -40,7 +47,8 @@ A customer is a VIP if the total amount spent
 on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 </em></p>
 
-Figure 2 showcases an example PL/SQL UDF, <b>is_vip</b>, which 
+Figure 2 showcases an example query invoking a UDF (<b>is_vip</b>) from SQL,
+with  Figure 3 providing the implementation of the <b>is_vip</b> UDF, which 
 returns whether a customer is a VIP. The <b>is_vip</b> UDF mixes declarative code
 (the <b>SELECT</b> statement) and procedural code (<b>IF/ELSE</b> statements). Allowing
 users to mix procedural and declarative code provides a more convenient and intuitive way
@@ -58,16 +66,12 @@ In the process, <b>SELECT</b> statements embedded inside the UDF are re-evaluate
 for each row, dramatically slowing down query execution. Database practitioners have
 termed this naive, inefficient, row-by-row execution of UDFs as [RBAR (Row-By-Agonizing-Row)](https://www.red-gate.com/simple-talk/databases/sql-server/t-sql-programming-sql-server/rbar-row-by-agonizing-row/).
 
-<img src="rbar.png" alt="Figure 3: Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs." width="70%" />
-<p style="text-align: left;">
-<b>Figure 3, Row-By-Agonizing-Row (RBAR) Execution of Queries with UDFs:</b>
-<em>
-An example query invoking the <b>is_vip</b> UDF from Figure 2. The DBMS naively evaluates the UDF for each input row of the <b>customer</b> table. Each UDF call executes an embedded <b>SELECT</b> statement that scans the <b>orders</b> table. The query's runtime complexity is <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient.
-</em></p>
-
-Figure 3 showcases an example query invoking the <b>is_vip</b> UDF from Figure 2.
-The DBMS invokes the UDF RBAR, calling the UDF for each row of the <b>customer</b> table.
-With each call to the UDF, the DBMS executes the embedded <b>SELECT</b> statement, re-scanning the <b>orders</b> table and leading to extremely inefficient query execution.
+For the query shown in Figure 2, the DBMS naively evaluates the UDF for each input row of the <b>customer</b> table. 
+Each UDF call executes an embedded <b>SELECT</b> statement that accesses the <b>orders</b> table.
+Without an available index on the <b>orders</b> table, the DBMS scans the entire table on each UDF invocation.
+Hence, the query's runtime complexity is <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient. With an index,
+the DBMS can avoid rescanning the <b>orders</b> table, but each UDF still incurs significant overhead, resulting in
+degraded query runtime.
 
 # UDF Inlining: Intuition
 
