@@ -44,7 +44,7 @@ The query computes for each <b>customer</b>, their name, and whether they are a 
 An example UDF written in PL/SQL. The function <b>is_vip</b>
 takes a customer key as input and returns whether the customer is a VIP.
 A customer is a VIP if the total amount spent 
-on orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
+on their orders (computed using the <b>SELECT</b> statement) exceeds 1,000,000.
 </em></p>
 
 Figure 2 showcases an example query invoking a UDF (<b>is_vip</b>) from SQL,
