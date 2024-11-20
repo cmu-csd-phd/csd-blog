@@ -128,8 +128,9 @@ effectively.
 [UDF inlining](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf) translates UDFs into equivalent SQL subqueries in three key steps. First,
 inlining translates a UDF's statements to SQL tables. <b>IF/ELSE</b> blocks become 
 <b>CASE WHEN</b> statements, assignments (i.e., <b>x = y</b>) become projections (i.e., <b>SELECT y AS x</b>).
-Then, the DBMS chains together these statements with <b>LATERAL</b> joins, creating a
- single SQL expression that is equivalent to the original UDF. The last step is to 
+Then, the DBMS chains together these statements with <b>LATERAL</b> joins. <b>LATERAL</b> joins are special joins
+which allow the joining tables to reference each other's columns. After inserting <b>LATERAL</b> joins, the resulting
+SQL expression is equivalent to the original UDF. The last step is to 
  "inline" the generated SQL expression into the calling query, eliminating the UDF call.
   After applying UDF inlining, queries are represented in pure SQL, automatically
 improving the performance of queries with UDFs by [multiple orders of magnitude](https://www.vldb.org/pvldb/vol11/p432-ramachandra.pdf).
@@ -259,7 +260,7 @@ We use the default index configuration for all workloads and build additional co
 <em>
  A table indicating whether a given DBMS (SQL Server or DuckDB) successfully unnested a UDF-centric query
 from the Microsoft SQL ProcBench with a given technique (inlining or PRISM). A green tick indicates that the unnesting succeeded.
- A grey cross indicates that the unnesting failed. 
+ A grey cross indicates that the unnesting failed. Figure 12 and Figure 7 share the same values for the queries unnested with inlining.
 </em></p>
 
 The principle issue with UDF inlining is that it produces complex subqueries with <b>LATERAL</b> joins
