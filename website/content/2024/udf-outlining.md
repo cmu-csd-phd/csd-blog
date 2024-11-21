@@ -59,9 +59,9 @@ and decompose complex queries into modular functions.
 
 # Row-By-Agonizing-Row (RBAR) Execution
 
-Unfortunately, UDFs come with a performance cost. Unlike SQL, which is purely declarative, UDFs mix declarative and procedural programming paradigms,
-making them opaque to the query optimizer. As a result, the DBMS must execute
-UDFs in a naive "row-by-row" fashion, where the UDF is reinvoked for each input row.
+Unfortunately, UDFs come with a performance cost. Unlike SQL, which is purely declarative, UDFs mix declarative and procedural programming paradigms.
+A DBMS's query optimizer can effectively reason about SQL, but was never designed to optimize non-declarative UDF code.
+As a consequence, DBMS's execute UDFs as opaque functions (much like built-in functions), evaluatnig them in a naive "row-by-row" fashion.
 In the process, <b>SELECT</b> statements embedded inside the UDF are re-evaluated
 for each row, dramatically slowing down query execution. Database practitioners have
 termed this naive, inefficient, row-by-row execution of UDFs as [RBAR (Row-By-Agonizing-Row)](https://www.red-gate.com/simple-talk/databases/sql-server/t-sql-programming-sql-server/rbar-row-by-agonizing-row/).
@@ -79,11 +79,12 @@ degraded query runtime.
 <p style="text-align: left;">
 <b>Figure 4, UDF Inlining Intuition:</b>
 <em>
-The key intuition behind UDF inlining is to translate UDFs from opaque functions into SQL subqueries, a declarative representation that the DBMS can optimize effectively. In the above example, inlining replaces the <b>is_vip</b> UDF by an equivalent SQL subquery.
+The key intuition behind UDF inlining is to translate UDFs from procedural functions into SQL subqueries,
+a declarative representation that the DBMS can optimize effectively. In the above example, inlining replaces the <b>is_vip</b> UDF by an equivalent SQL subquery.
 </em></p>
 
-RBAR execution of UDFs arises because UDFs are opaque functions written in a 
-non-declarative paradigm that the DBMS cannot effectively reason about. Such row-by-row
+The DBMS employs RBAR execution of UDFs as they are written in a 
+non-declarative paradigm that the query optimizer cannot effectively reason about. Such row-by-row
 execution is reminiscent of how database systems logically evaluate SQL subqueries, 
 whereby the DBMS re-evaluates a subquery for each row of the calling query. The key 
 distinction, however, between UDFs and subqueries is that the database community has 
