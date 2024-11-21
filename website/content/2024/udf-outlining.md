@@ -279,7 +279,7 @@ subquery unnesting compared to naively inlining the entire UDF.
 
 # Experiments: Overall Speedup
 
-<img src="speedup.png" alt="Figure 13: Overall Speedup (ProcBench)." width="60%" />
+<img src="speedup.png" alt="Figure 13: Overall Speedup (ProcBench)." width="70%" />
 <p style="text-align: left;">
 <b>Figure 13, Overall Speedup (ProcBench):</b>
 <em>
