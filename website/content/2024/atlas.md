@@ -1,0 +1,214 @@
++++
+# The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
+title = "Atlas: Hierarchical Partitioning for Quantum Circuit Simulation on GPUs"
+# Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
+date = 2024-11-17
+
+[taxonomies]
+# Keep any areas that apply, removing ones that don't. Do not add new areas!
+areas = ["Systems"]
+# Tags can be set to a collection of a few keywords specific to your blogpost.
+# Consider these similar to keywords specified for a research paper.
+tags = ["parallel programming", "quantum simulation"]
+
+[extra]
+author = {name = "Mingkuan Xu", url = "https://mingkuan.taichi.graphics" }
+# The committee specification is  a list of objects similar to the author.
+committee = [
+    {name = "Elaine Shi", url = "http://www.cs.cmu.edu/~bovik/"},
+    {name = "Tianqi Chen", url = "Committee Member 2's page"},
+    {name = "Mingxun Zhou", url = "Committee Member 3's page"}
+]
++++
+
+# Background
+
+## Quantum Circuit Simulation
+
+In the current Noisy Intermediate-Scale Quantum (NISQ) era,
+quantum computers are a scarce resource, and they suffer from
+decoherence and lack of error-correction.
+Therefore, there is significant interest in quantum circuit simulation
+which enables performing robust quantum computation on classical
+parallel machine, and helps develop and debug quantum algorithms.
+
+There are many methods to simulate quantum circuits.
+This blog post focuses on the *state-vector* (Schr\¨odinger style)
+simulation, which is the most general method.
+Some other methods include:
+- Feynman-path simulation, which is good for sparse circuits;
+- Tensor network simulation, which is good for circuits with low entanglement;
+- Stabilizer simulation, which is good for Clifford circuits.
+These methods target circuits with certain structures.
+For general circuits with good "quantumness"
+
+## Quantum Information Fundamentals
+
+State-vector simulation features a direct representation of the quantum state.
+A quantum state of \\( n \\) qubits is represented by a unitary (complex) vector
+of size \\( 2^n \\).
+
+
+
+
+
+After filling in the above "top-matter", as per instructions provided
+in the `.md` file, you can write the main body of the blogpost here
+onwards. Commonly used examples of syntax are shown below.
+
+You can run `./local_server.sh` at the root of the repository to see
+how the final blogpost looks in action.
+
+# Section Heading
+
+## Subsection Heading
+
+Some text.
+
+## Another Subsection Heading
+
+Some more text.
+You can write lines
+separately
+and it'll still
+be considered
+a single paragraph. Paragraphs are separated by a
+blank line.
+
+# Another Section
+
+You can **bold** things by wrapping them in two asterisks/stars. You
+can _italicise_ things by wrapping them in underscores. You can also
+include inline `code` which is done by wrapping with backticks (the
+key likely to the left of the 1 on your keyboard).
+
+If you want to add larger snippets of code, you can add triple
+backticks around them, like so:
+
+```
+this_is_larger = true;
+show_code(true);
+```
+
+However, the above doesn't add syntax highlighting. If you want to do
+that, you need to specify the specific language on the first line, as
+part of the backticks, like so:
+
+```c
+#include <stdio.h>
+
+int main() {
+   printf("Hello World!");
+   return 0;
+}
+```
+
+If you want to quote someone, simply prefix whatever they said with a
+`>`. For example:
+
+> If it is on the internet, it must be true.
+
+-- Abraham Lincoln
+
+You can also nest quotes:
+
+> > You miss 100% of the shots you don't take
+>
+> -- Wayne Gretzky
+
+-- Michael Scott
+
+Every paragraph _immediately_ after a quote is automatically right
+aligned and pressed up against the quote, since it is assumed to be
+the author/speaker of the quote. You can suppress this by adding a
+`<p></p>` right after a quote, like so:
+
+> This is a quote, whose next para is a normal para, rather than an
+> author/speaker
+
+<p></p>
+
+This paragraph is perfectly normal, rather than being forced
+right. Additionally, you could also add a `<br />` right beside the
+`<p></p>` to give some more breathing room between the quote and the
+paragraph.
+
+In the author notifications above, btw, note how the double-hyphen
+`--` automatically becomes the en-dash (--) and the triple-hyphen
+`---` automatically becomes the em-dash (---). Similarly, double- and
+single-quotes are automagically made into "smart quotes", and the
+ellipsis `...` is automatically cleaned up into an actual ellipsis...
+
+---
+
+You can add arbitrary horizontal rules by simply placing three hyphens
+on a line by themselves.
+
+---
+
+Of course, you can write \\( \LaTeX \\) either inline by placing stuff
+within `\\(` and `\\)` markers, or as a separate equation-style LaTeX
+output by wrapping things in `\\[` and `\\]`:
+
+\\[ \sum_{n_1 \in \N} \frac{n_1}{n_2} \\]
+
+Alternatively, you can wrap it inside of a pair of double-dollar signs
+`$$`:
+
+$$ \frac{\Phi \in \psi}{\psi \rightarrow \xi} $$
+
+Single dollar signs unfortunately do not work for inline LaTeX.
+
+# More fun!
+
+Of course, you can add links to things, by using the right syntax. For
+example, [here is a link to NASA](https://www.nasa.gov/). Standard
+HTML-like shenanigans, such as appending a `#anchor` to the end of the
+link also work. Relative links within the website also work.
+
+You can also use the links to link back to parts of the same
+blogpost. For this, you need to find the "slug" of the section. For
+this, you can force a slug at the section heading, and then simply
+refer to it, like the [upcoming section](#finale), or alternatively,
+you can take the lowercase version of all the parts of a section and
+place hyphens between them, like [this](#more-fun) or
+[this](#another-section).
+
+Pictures, of course, can be added. The best way to do this is to
+utilize relative links (just add images into the right directory, see
+the main `README` file in this repository to learn where it should
+go), but you can link to external images too in the same way. For
+example,
+
+![i are serious cat](https://upload.wikimedia.org/wikipedia/commons/4/44/CatLolCatExample.jpg)
+
+Of course, it is good etiquette to add alt-text to your images, like
+has been done in the previous image, with "i are serious cat". It
+helps with accessibility.
+
+Images are automatically shown at a reasonable size by limiting their
+maximum width. If you have a particularly tall image, you might have
+to do some manipulation yourself though. Images should also
+automatically work properly in mobile phones :)
+
+---
+
+Do you want some tables? Here are some tables:
+
+
+| Header 1   | Another header here   | This is a long header |
+|:---------- | ---------------------:|:---------------------:|
+| Some data  | Some more data        | data \\( \epsilon \\) |
+| data       | Some _long_ data here | more data             |
+| align left |   right               | center                |
+
+You use the `:` specifier in the table header-body splitting line to
+specify whether the particular column should be left, center, or right
+aligned. All the standard markdown elements continue to work within
+the table, so feel free to use them.
+
+# Finale {#finale}
+
+Finally, you're at the end of your blogpost! Your name will appear
+again at the end automatically, as will the committee members who will
+(hopefully) approve your blogpost with no changes! Good luck!
