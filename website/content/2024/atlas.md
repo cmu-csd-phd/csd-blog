@@ -26,7 +26,7 @@ committee = [
 ## Introduction
 In the current Noisy Intermediate-Scale Quantum (NISQ) era, quantum computers are a scarce resource, and they suffer from decoherence and lack of error correction. Therefore, there is significant interest in quantum circuit simulation which enables performing robust quantum computation on classical parallel machine, and helps develop and debug quantum algorithms.
 
-There are many methods to simulate quantum circuits. This blog post focuses on the *state-vector* (Schrödinger style) simulation, the most general, straightforward, and well-studied method. Some other techniques for noise-free accurate quantum circuit simulation include:
+There are many methods to simulate quantum circuits. This blog post focuses on the *state-vector* (Schrödinger style) simulation, the most general, straightforward, and well-studied approach. Some other techniques for noise-free accurate quantum circuit simulation include:
 
 - Feynman-path simulation, which is good for sparse circuits;
 - Tensor network simulation, which is good for circuits with low entanglement;
@@ -53,22 +53,22 @@ In quantum computing, computation is specified using quantum gates. Quantum gate
 If the quantum gate only operates on a part of qubits, we need to compute the tensor product before performing the matrix multiplication. For example, when applying the single-qubit gate 
 $$
 U_1(\theta) = \begin{pmatrix}
-1 & 0 \\
+1 & 0 \\\\
 0 & e^{i\theta}
 \end{pmatrix}
 $$
 to the first qubit (the less significant bit in the state index) of a 2-qubit state, the computation becomes
 $$
 (U_1(\theta) \otimes I) \ket{\psi} = \begin{pmatrix}
-1 & 0 & 0 & 0 \\
-0 & e^{i\theta} & 0 & 0 \\
-0 & 0 & 1 & 0 \\
+1 & 0 & 0 & 0 \\\\
+0 & e^{i\theta} & 0 & 0 \\\\
+0 & 0 & 1 & 0 \\\\
 0 & 0 & 0 & e^{i\theta}
 \end{pmatrix}
 \begin{pmatrix}
-\alpha_{00}\\
-\alpha_{01}\\
-\alpha_{10}\\
+\alpha_{00}\\\\
+\alpha_{01}\\\\
+\alpha_{10}\\\\
 \alpha_{11}
 \end{pmatrix}.
 $$
@@ -83,8 +83,17 @@ We assume a multi-node GPU architecture with \\(2^G\\) computation nodes. We pre
 $$
 2^n = 2^{G+R+L}
 $$
-on the GPUs.
-We can associate the parameters with the qubits: suppose there are \\(G\\) global qubits, \\(R\\) regional qubits, and \\(L\\) local qubits, and we can simulate quantum circuits of \\(n = L + R + G\\) qubits. If there are fewer qubits (\\(n\\) is smaller), we can set \\(G = n - L - R\\) and use fewer GPU nodes.
+on the GPUs. We will discuss the DRAM offloading variant [at the end of this blog post](#dram-offloading).
+
+## Local, Regional, and Global Qubits
+The reason why the number of computation nodes \\(2^G\\), number of GPUs per node \\(2^R\\), and the GPU memory size \\(2^L\\) are all powers of two is that we can then associate the parameters with the qubits: suppose there are \\(G\\) global qubits, \\(R\\) regional qubits, and \\(L\\) local qubits. We can simulate quantum circuits of \\(n = L + R + G\\) qubits. If there are fewer qubits (\\(n\\) is smaller), we can set \\(G = n - L - R\\) and use fewer GPU nodes.
+
+The following figure shows an example of Atlas hierarchical partitioning approach as well as the data layout on each GPU. Suppose the qubits are indexed \\(q_4 q_3 q_2 q_1 q_0 \\) in the state vector indices at the bottom of the figure. There is \\(G = 1\\) global qubit \\(q_4\\), \\(R = 1\\) regional qubit \\(q_3\\), and \\(L = 3\\) local qubits \\(q_2, q_1, q_0\\). Node 0 stores the shards where the global qubit \\(q_4 = \ket{0}\\), and GPU 0 stores the shard where the global qubit \\(q_4\\) and the regional qubit \\(q_3\\) are both \\(\ket{0}\\).
+
+## Simulating Quantum Gates on GPUs
+There is only intra-GPU communication when simulating a quantum gate operating only on local qubits.
 
 
+## DRAM Offloading
+test
 
