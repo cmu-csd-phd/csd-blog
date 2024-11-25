@@ -77,7 +77,14 @@ You may have realized that we don't actually have to explicitly compute the tens
 
 State-vector simulation simply computes these matrix-vector multiplications on classical machines. Given such high parallelism (quantum gates are typically either single-qubit or two-qubit), it is natural to use GPUs, or more precisely, distributed GPUs for state-vector simulation when the exponential-sized state vector exceeds the memory limit of a single GPU.
 
-
+# Setup
+## Architectural Model
+We assume a multi-node GPU architecture with \\(2^G\\) computation nodes. We present two variants of computation nodes: the first one is each node contains \\(2^R\\) GPUs, and each GPU can store \\(2^L\\) amplitudes (complex numbers), and the second one is each node contains some GPUs and a CPU with DRAM that can store \\(2^{L+R}\\) amplitudes. For simplicity, let's focus on the first variant first, where we can store the entire state vector of size
+$$
+2^n = 2^{G+R+L}
+$$
+on the GPUs.
+We can associate the parameters with the qubits: suppose there are \\(G\\) global qubits, \\(R\\) regional qubits, and \\(L\\) local qubits, and we can simulate quantum circuits of \\(n = L + R + G\\) qubits. If there are fewer qubits (\\(n\\) is smaller), we can set \\(G = n - L - R\\) and use fewer GPU nodes.
 
 
 
