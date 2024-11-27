@@ -115,7 +115,7 @@ CNOT = \begin{pmatrix}
 $$
 The gate does nothing when the control qubit is \\(\ket{0}\\), or applies the NOT operation (flipping \\(\ket{0}\\) to \\(\ket{1}\\), and \\(\ket{1}\\) to \\(\ket{0}\\)) to the target qubit when the control qubit is \\(\ket{1}\\). In the following circuit, the control qubit is \\(q\_1\\), and the target qubit is \\(q\_0\\). So, executing this gate is equivalent to swapping the amplitudes of \\(q\_0 = \ket{0}\\) and \\(q\_0 = \ket{1}\\) when \\(q\_1 = \ket{1}\\). The pattern of these swaps is shown in the orange curves on the left of the figure above. There is only intra-GPU communication when we execute this CNOT gate, and this property holds for any gate operating entirely on local qubits.
 
-![A quantum circuit with 5 qubits. q0, q1, q2 are local qubits, and there is a CNOT gate with q1 being the control qubit and q0 being the target qubit.](./local-cnot-gate.png)
+![An example quantum circuit with 5 qubits. q0, q1, q2 are local qubits. There is a CNOT gate with q1 being the control qubit and q0 being the target qubit highlighted in yellow, and a CNOT gate with q3 being the control qubit and q2 being the target qubit highlighted in blue.](./circuit-example.png)
 
 ### Do Not Execute "Non-Local" Gates
 If a gate operates on non-local qubits, things become different. For example, the Hadamard gate on \\(q\_4\\), denoted by the letter H, would multiply a \\(2\times 2\\) matrix to each of the 16 vectors in
@@ -130,7 +130,7 @@ In fact, not all "non-local" gates are expensive. We call the non-local qubits i
 - For a single-qubit gate, the qubit is insular if the unitary matrix of the gate is diagonal or anti-diagonal.
 - For a multi-qubit controlled gate, control qubits are insular.
 
-For example, the last CNOT gate in the figure above has a non-local control qubit \\(q\_3\\) and a local target qubit \\(q\_2\\). We can execute this gate efficiently by sending different instructions to different GPUs. Since the control qubit is non-local, we know if it is \\(\ket{0}\\) or \\(\ket{1}\\) from the GPU number. We can then lower the CNOT gate into a NOT gate when \\(q\_3 = \ket{1}\\) on GPUs 1 and 3, and do nothing when \\(q\_3 = \ket{0}\\) on GPUs 0 and 2.
+For example, the last CNOT gate highlighted in blue in the figure above has a non-local control qubit \\(q\_3\\) and a local target qubit \\(q\_2\\). We can execute this gate efficiently by sending different instructions to different GPUs. Since the control qubit is non-local, we know if it is \\(\ket{0}\\) or \\(\ket{1}\\) from the GPU number. We can then lower the CNOT gate into a NOT gate when \\(q\_3 = \ket{1}\\) on GPUs 1 and 3, and do nothing when \\(q\_3 = \ket{0}\\) on GPUs 0 and 2.
 
 This property allows Atlas to only consider the non-insular qubits of quantum gates when mapping qubits.
 
@@ -176,7 +176,7 @@ $$
 
 To achieve the best kernelization result, we would like to allow for gate reordering in the sequence. The DP state \\(DP[i, \kappa]\\) represents an ordered kernel set \\(\kappa\\) for the first \\(i\\) gates in the gate sequence. However, we cannot partition the gates arbitrarily. The following figure shows an infeasible kernel schedule because the two blue dotted kernels are not "convex".
 
-[Kernel examples. The two green dashed kernels satisfy the constraints. The two blue dotted kernels do not satisfy the constraints and thus are not considered by the DP algorithm.](./kernel-constraint.svg)
+![Kernel examples. The two green dashed kernels satisfy the constraints. The two blue dotted kernels do not satisfy the constraints and thus are not considered by the DP algorithm.](./kernel-constraint.png)
 
 To allow for gate reordering while not introducing infeasible kernel schedules, we present the following two constraints for the kernels to be considered by the algorithm:
 
