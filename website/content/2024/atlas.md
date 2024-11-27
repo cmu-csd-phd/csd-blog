@@ -96,7 +96,7 @@ $$
 on the GPUs. We will discuss the DRAM offloading variant [at the end of this blog post](#dram-offloading).
 
 ## Local, Regional, and Global Qubits
-The reason why the number of computation nodes \\(2^G\\), number of GPUs per node \\(2^R\\), and the GPU memory size \\(2^L\\) are all powers of two is that we can then associate the parameters with the qubits: suppose there are \\(G\\) global qubits, \\(R\\) regional qubits, and \\(L\\) local qubits. We can simulate quantum circuits of \\(n = L + R + G\\) qubits. If there are fewer qubits (\\(n\\) is smaller), we can set \\(G = n - L - R\\) and use fewer GPU nodes.
+The reason why the number of computation nodes \\(2^G\\), number of GPUs per node \\(2^R\\), and the GPU memory size \\(2^L\\) are all powers of two is that we can then associate the parameters with the qubits: suppose there are \\(G\\) global qubits, \\(R\\) regional qubits, and \\(L\\) local qubits. We can simulate quantum circuits of \\(n = L + R + G\\) qubits. If there are fewer qubits (\\(n\\) is smaller), we can set \\(G = n - L - R\\), and use fewer GPU nodes.
 
 The following figure shows an example data layout of a state vector of 5 qubits on 2 nodes with 2 GPUs in each node. Suppose the qubits are indexed \\(q\_4 q\_3 q\_2 q\_1 q\_0 \\) in the state vector indices at the bottom of the figure. There is \\(G = 1\\) global qubit \\(q\_4\\), \\(R = 1\\) regional qubit \\(q\_3\\), and \\(L = 3\\) local qubits \\(q\_2, q\_1, q\_0\\). Node 0 stores the shards where the global qubit \\(q\_4 = \ket{0}\\), and GPU 0 stores the shard where the global qubit \\(q\_4\\) and the regional qubit \\(q\_3\\) are both \\(\ket{0}\\).
 
@@ -202,7 +202,7 @@ On a benchmark of 99 circuits, Atlas is \\(4\times\\) on average faster than HyQ
 ## DRAM Offloading
 In addition to improving quantum circuit simulation performance, another key advantage of Atlas over existing systems is its ability to scale to larger circuits beyond the GPU memory capacity. Recall that we assumed that each computation node has \\(2^R\\) GPUs [before](#architectural-model). Instead, suppose we do not have that many GPUs, but only some GPUs and a CPU with DRAM that can store \\(2^{L+R}\\) amplitudes (complex numbers). In each stage, we will then have to run \\(2^R\\) shards of the state vector serially on one GPU by loading the shard from the DRAM, execute the kernels, and then store the shard back to DRAM each time (or let each GPU run \\(2^R / p\\) shards serially if we have \\(p\\) GPUs).
 
-We compare Atlas with QDAO which is another GPU simulator using DRAM offloading to support larger circuits. As shown in the figure below (note that the \\(y\\)-axis is in log-scale). Atlas runs \\(61\times\\) faster than QDAO on average on the QFT circuits, and scales better.
+We compare Atlas with QDAO which is another GPU simulator using DRAM offloading to support larger circuits. The figure below (note that the \\(y\\)-axis is in log-scale) shows that Atlas runs \\(61\times\\) faster than QDAO on average on the QFT circuits with 28-32 total qubits on a single GPU with 28 local qubits, and scales better.
 
 ![Atlas outperforms QDAO by 61 times on average. Log-scale simulation time (single GPU) with DRAM offloading for QFT circuits.](./scalability-qdao.svg)
 
