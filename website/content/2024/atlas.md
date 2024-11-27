@@ -138,7 +138,7 @@ Putting these together, an algorithm seems ready to come out: iteratively execut
 
 # Hierarchical Partitioning Overview
 
-[Overview](./overview.pdf)
+![Overview](./overview.png)
 
 
 This figure shows an example application of circuit partitioning and execution. We stage the circuit so that (non-insular) qubits of each gate map to local qubits (i.e., green lines in each stage). The notation \\(q\_i[p\_j]\\) indicates that the \\(i\\)-th logical qubit maps to the \\(j\\)-th physical qubit (data layout). We then partition the gates of each stage into kernels for data parallelism. After partitioning into kernels, we execute the kernels on each GPU. Each GPU executes a shard of the state vector. Between each stage, we shard the state vector again via all-to-all communication between GPU pairs.
@@ -176,7 +176,7 @@ $$
 
 To achieve the best kernelization result, we would like to allow for gate reordering in the sequence. The DP state \\(DP[i, \kappa]\\) represents an ordered kernel set \\(\kappa\\) for the first \\(i\\) gates in the gate sequence. However, we cannot partition the gates arbitrarily. The following figure shows an infeasible kernel schedule because the two blue dotted kernels are not "convex".
 
-[Kernel examples. The two green dashed kernels satisfy the constraints. The two blue dotted kernels do not satisfy the constraints and thus are not considered by the DP algorithm.](./kernel-constraint.pdf)
+[Kernel examples. The two green dashed kernels satisfy the constraints. The two blue dotted kernels do not satisfy the constraints and thus are not considered by the DP algorithm.](./kernel-constraint.svg)
 
 To allow for gate reordering while not introducing infeasible kernel schedules, we present the following two constraints for the kernels to be considered by the algorithm:
 
@@ -190,7 +190,7 @@ These two constraints impose a low cost in implementation (in terms of the runni
 # Comparing with Previous Works
 We compare our work Atlas with previous distributed GPU simulators HyQuas, cuQuantum, and Qiskit. They all store the entire state vector on GPUs. The following figure shows a weak scaling experiment on the circuit family of QFT, and all circuits in our benchmark of 11 quantum circuit families exhibit a similar pattern. 
 
-![Weak scaling of Atlas, HyQuas, cuQuantum, and Qiskit with 28 local qubits as the number of global qubits increases from 0 (on 1 GPU) to 8 (on 256 GPUs) on the QFT circuits. Qiskit is slow and usually does not fit into our charts.](./qft-perf.pdf) 
+![Weak scaling of Atlas, HyQuas, cuQuantum, and Qiskit with 28 local qubits as the number of global qubits increases from 0 (on 1 GPU) to 8 (on 256 GPUs) on the QFT circuits. Qiskit is slow and usually does not fit into our charts.](./qft-perf.svg) 
 
 HyQuas performs well when the number of GPUs is small, but it does not scale well when the number of GPUs is large. HyQuas also partition the circuit into kernels, but it uses a greedy approach: it packs gates into kernels of 4-7 qubits or uses a shared-memory kernel, greedily choosing the one with the best arithmetic density each time. cuQuantum, developed by NVIDIA, scales better than HyQuas, but it is slower and not as scalable as Atlas. cuQuantum uses a tailored function "custatevecMultiDeviceIndexBitSwaps" to minimize communication, but it does not focus on circuit kernelization: cuQuantum simply packs gates up to 4 or 5 qubits depending on the GPU model.
 
@@ -204,7 +204,7 @@ In addition to improving quantum circuit simulation performance, another key adv
 
 We compare Atlas with QDAO which is another GPU simulator using DRAM offloading to support larger circuits. As shown in the figure below (note that the \\(y\\)-axis is in log-scale). Atlas runs \\(61\times\\) faster than QDAO on average on the QFT circuits, and scales better.
 
-![Atlas outperforms QDAO by 61 times on average. Log-scale simulation time (single GPU) with DRAM offloading for QFT circuits.](./scalability-qdao.pdf)
+![Atlas outperforms QDAO by 61 times on average. Log-scale simulation time (single GPU) with DRAM offloading for QFT circuits.](./scalability-qdao.svg)
 
 ## Circuit Staging & Kernelization
 
@@ -212,11 +212,11 @@ We have also done evaluations on the circuit staging and kernelization algorithm
 
 For circuit staging, we compare with SnuQS, which greedily selects the qubits with more gates operating on non-local gates in the current stage to form the next stage, and uses the number of total gates as a tiebreaker. Other works did not describe how the heuristics were implemented. The following figure shows the geometric mean number of stages for all 11 circuits with 31 qubits in our benchmark suite. Our circuit staging algorithm is guaranteed to return the minimum number of stages, and it always outperforms SnuQS' approach. 
 
-![Number of stages, Atlas versus SnuQS: The geometric mean over all our benchmark circuits with 31 qubits.](./ilp-plot-31.pdf)
+![Number of stages, Atlas versus SnuQS: The geometric mean over all our benchmark circuits with 31 qubits.](./ilp-plot-31.svg)
 
 For circuit kernelization, we compare with a baseline that greedily packs gates into fusion kernels of up to 5 qubits, the most cost-efficient kernel size in the cost function used in our experiment setting. Each circuit family exhibits a pattern, so we take the geometric mean of the cost for 9 circuits with the number of qubits from 28 to 36 for each circuit family. The following figure shows that the greedy baseline performs well in dj and qsvm circuits, but it does not generalize to other circuits. Our kernelization algorithm is able to exploit the pattern for each circuit and find a low-cost kernel sequence accordingly.
 
-![Kernelization effectiveness: The relative geometric mean cost of KERNELIZE compared to greedy packing up to 5 qubits.](./dp-circuit-geomean-relative.pdf)
+![Kernelization effectiveness: The relative geometric mean cost of KERNELIZE compared to greedy packing up to 5 qubits.](./dp-circuit-geomean-relative.svg)
 
 # Conclusion
 
