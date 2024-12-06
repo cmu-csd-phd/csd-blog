@@ -54,7 +54,7 @@ Case in point, as shown in the figure below, the memory capacity of servers at M
 Google's profiling further revealed that approximately 
 20% of CPU cycles in their datacenters are stalled on TLB misses [1].
 
-<img src="./bg-mem-tlb.pdf" alt="Memory and TLB coverage of computing hardware across generations." width="500"/>
+<img src="./bg-mem-tlb.png" alt="Memory and TLB coverage of computing hardware across generations." width="500"/>
 
 Unfortunately, this problem is only bound to get worse due to: (i) the inherent hardware limits of TLB size scaling, (ii) terabyte-scale memory capacity through technologies like Compute Express Link ([CXL](https://computeexpresslink.org)), and (iii) the increase of memory-intensive applications such as those for graph processing, caching and scientific computing.
 
@@ -73,7 +73,7 @@ To test whether this is the case, we performed a detailed investigation of memor
 We sampled servers across the fleet, and we show the memory contiguity distribution in the following figure.
 The values on the x-axis represent the amount of contiguous free memory of a particular size (2MB, 4MB, 32MB, 1GB) as a percentage of total free memory on a server.
 
-<img src="./bg-frag.pdf" alt="Contiguity availability as the percentage of free memory." width="500"/>
+<img src="./bg-frag.png" alt="Contiguity availability as the percentage of free memory." width="500"/>
 
 Looking at the x-axis value at 0% (circled in the figure), we see that 23% of servers do not even have physical memory contiguity for a single 2MB huge page.
 We observe that memory contiguity worsens at 4MB and 32MB, with 60% of servers unable to allocate a single 32MB page.
@@ -87,14 +87,14 @@ Memory compaction recovers memory contiguity by migrating away in-use pages to c
 Unmovable pages, as their name suggests, cannot be moved around to defragment the memory and recover memory contiguity, causing compaction failures. This is illustrated in the figure below: compaction cannot migrate the unmovable pages, failing to create larger memory contiguity.
 In particular, we identify several sources of unmovable pages, including networking buffers, filesystems, and page tables. 
 
-<img src="./compaction.pdf" alt="How compaction works and how unmovable pages block commpaction." width="600"/>
+<img src="./compaction.png" alt="How compaction works and how unmovable pages block commpaction." width="600"/>
 
 # Contiguitas Design
 
 To address the lack of physical memory contiguity and alleviate the virtual memory overhead, we introduce **Contiguitas** with the goal of eliminating fragmentation due to unmovable pages.
 To that end, Contiguitas first redesigns memory management in the OS to confine unmovable pages and completely separate them from movable ones (Step 1), preventing unmovable pages from scattering across the address space. Then, Contiguitas dynamically resizes regions in response to memory pressure (Step 2). Finally, Contiguitas drastically reduces previously unmovable pages through hardware extensions in the last-level cache (LLC) that enable transparent migration of unmovable pages while they are in use (Step 3).
 
-![Contiguitas design overview.](./overview_main_v2.pdf)
+<img src="./overview_main_v2.png" alt="Contiguitas design overview." width="500"/>
 
 ## Unmovable Confinement
 
@@ -139,7 +139,7 @@ To this end, Contiguitas enables transparent page migration while the page remai
 
 The hardware extensions of Contiguitas are located in the LLC as shown in the figure below. Contiguitas targets a multi-core processor with a cache-coherent interconnect. The hardware platform further includes an Input-Output Memory Management Unit (IOMMU) with local TLBs.
 
-![Contiguitas hardware overview.](./arch_overview.pdf)
+<img src="./arch_overview.png" alt="Contiguitas hardware overview." width="500"/>
 
 At a high level, Contiguitas aliases a physical page under migration with a destination page and redirects appropriate traffic to the destination page based on the progress of the migration.
 Specifically, a page migration is initiated in Step 1 by the OS that provides the source and destination physical page numbers (PPN) to Contiguitas. Contiguitas stores them in a metadata table (part b in the figure) along with a *Ptr* field that points to the next line to be copied, and enables access redirection.
@@ -158,7 +158,7 @@ We implement the OS component of Contiguitas in Linux and run our experiments in
 To quantify the impact of Contiguitas on memory contiguity, we compare each workload's steady state under Linux and Contiguitas.
 Specifically, we quantify the contiguous regions that can be formed if we run a perfect software compaction in order to service allocation requests of 2MB, 32MB and 1GB pages.
 
-<img src="./eval-contiguity.pdf" alt="Potential memory contiguity as a percentage of total memory." width="500"/>
+<img src="./eval-contiguity.png" alt="Potential memory contiguity as a percentage of total memory." width="500"/>
 
 With Linux we see that some 2MB allocation are possible as there is still some physical memory not polluted by unmovable pages. 
 However, Linux struggles as we search for larger contiguous regions at 32MB granularity, and fails to find even a single 1GB page. 
@@ -171,7 +171,7 @@ To measure Contiguitas' improvements to end-to-end performance due to increased 
 We consider two setups: *Full Fragmentation* (Linux Full) and *Partial Fragmentation* (Linux Partial).
 *Full Fragmentation* represents the case where a workload lands on a server whose memory is already fully fragmented without any 2MB memory contiguity. *Partial Fragmentation* represents the case where a workload lands on a partially fragmented server at random that is representative of the majority of servers at Meta.
 
-<img src="./eval-app-perf.pdf" alt="End-to-end performance over Meta's production workloads." width="500"/>
+<img src="./eval-app-perf.png" alt="End-to-end performance over Meta's production workloads." width="500"/>
 
 Contiguitas achieves performance improvements between 2-9% for partially fragmented servers that represent the majority of the servers, and between 7-18% for fully fragmented servers that represent nearly a quarter of Meta's fleet. Notably, Contiguitas' contiguity gains enable Web (one of Meta's largest services) to dynamically allocate 1GB huge pages, leading to a 7.5% performance win (shown as the red bar) that is unattainable with 2MB pages alone. 
 
