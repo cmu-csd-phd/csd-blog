@@ -61,7 +61,7 @@ and decompose complex queries into modular functions.
 
 Unfortunately, UDFs come with a performance cost. Unlike SQL, which is purely declarative, UDFs mix declarative and procedural programming paradigms.
 A DBMS's query optimizer can effectively reason about SQL, but was never designed to optimize non-declarative UDF code.
-As a consequence, DBMS's execute UDFs as opaque functions (much like built-in functions), evaluatnig them in a naive "row-by-row" fashion.
+As a consequence, DBMS's execute UDFs as opaque functions (much like built-in functions), evaluating them in a naive "row-by-row" fashion.
 In the process, <b>SELECT</b> statements embedded inside the UDF are re-evaluated
 for each row, dramatically slowing down query execution. Database practitioners have
 termed this naive, inefficient, row-by-row execution of UDFs as [RBAR (Row-By-Agonizing-Row)](https://www.red-gate.com/simple-talk/databases/sql-server/t-sql-programming-sql-server/rbar-row-by-agonizing-row/).
@@ -104,18 +104,12 @@ An illustration of how DBMSs perform subquery unnesting. The SQL query is rewrit
 an inefficient query containing a subquery to an equivalent query containing joins that are significantly faster to execute.
 </em></p>
 
-The database research community has spent decades developing optimization techniques to 
-evaluate SQL queries with subqueries efficiently. Subquery unnesting is performed by the 
-DBMS's query optimizer, replacing subqueries with equivalent join operators.
+UDF inlining avoids RBAR execution by translating UDFs into subqueries that the DBMS can <b>unnest</b>, replacing subqueries with equivalent join operators.
 
 On the left-hand side of Figure 5 is a SQL query containing a subquery (shown in red).
 The naive way of evaluating the query is by re-evaluating the subquery for each row of 
 the <b>orders</b> table and rescanning the <b>customer</b> table. Evaluating the query in
-this manner results in a runtime of <b>Θ(|customer| × |orders|)</b>, which is extremely inefficient.
-
-Instead of evaluating subqueries in a naive "row-by-row" manner, database systems perform [subquery unnesting](https://materialize.com/blog/decorrelation-subquery-optimization/).
-Subquery unnesting replaces the subquery with equivalent join operators. The right-hand side of Figure 5 illustrates the rewritten query,
-which the DBMS evaluates efficiently in <b>Θ(|customer| + |orders|)</b> time with hash joins.
+this manner results in a runtime of <b>Θ(|customer| × |orders|)</b>, which is highly inefficient. The right-hand side of Figure 5 illustrates the rewritten query after the DBMS performs subquery unnesting, efficiently evaluating the query in <b>Θ(|customer| + |orders|)</b> time with hash joins.
 
 # UDF Inlining: Further Details
 
@@ -281,15 +275,15 @@ subquery unnesting compared to naively inlining the entire UDF.
 
 <img src="speedup.png" alt="Figure 13: Overall Speedup (ProcBench)." width="70%" />
 <p style="text-align: left;">
-<b>Figure 13, Overall Speedup (ProcBench):</b>
+<b>Figure 13, Aritmethic Mean Speedup (ProcBench):</b>
 <em>
 A table indicating the overall speedup on the Microsoft SQL ProcBench when running queries with PRISM over inlining the entire UDF.
 We calculate speedup by dividing the runtime of running a given query without PRISM (i.e., inlining the entire UDF) by the runtime with PRISM.
-We report the average speedup (excluding outliers) and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
+We report the arithmetic mean speedup (excluding outliers) and the maximum speedup (including outliers). We observe that PRISM provides significant performance improvements over existing UDF optimization techniques.
 </em></p>
 
-Figure 13 details the average and maximum speedup of the ProcBench queries when running PRISM. We observe that, on average, PRISM attains an average speedup of 298.7× due to 8 of the 15 ProcBench queries now evaluating efficiently with joins after successful unnesting rather than RBAR. The maximum speedup for SQL Server is 2997.9×, again due to more effective unnesting,
-for a query that spends the entirety of its execution time in the UDF call. DuckDB can unnest arbitrary queries. Therefore, PRISM offers a more modest average speedup of 1.29× due to 
+Figure 13 details the arithmetic mean (average) and maximum speedup of the ProcBench queries when running PRISM. We observe that, on average, PRISM attains a speedup of 298.7× due to 8 of the 15 ProcBench queries now evaluating efficiently with joins after successful unnesting rather than RBAR. The maximum speedup for SQL Server is 2997.9×, again due to more effective unnesting,
+for a query that spends the entirety of its execution time in the UDF call. DuckDB can unnest arbitrary queries. Therefore, PRISM offers a more modest arithmetic mean speedup of 1.29× due to 
 eliminating <b>LATERAL</b> joins from the query plan. Lastly, PRISM delivers a maximum speedup of 2270.2× on DuckDB, as the query after UDF inlining is so complex, that even after unnesting, the DBMS picks an inefficient query plan with a large cross-product.  In contrast, the generated query is substantially simpler with PRISM,  leading to an efficient plan 
 evaluated with hash joins. PRISM significantly improves SQL Server and DuckDB compared to inlining entire UDFs by generating simpler queries that are easier to optimize.
 
@@ -298,4 +292,4 @@ evaluated with hash joins. PRISM significantly improves SQL Server and DuckDB co
 The database community developed UDF inlining to translate entire  UDFs to SQL for more effective query optimization. We observe that inlining entire UDFs leads to complex, obfuscated queries that are challenging for DBMSs to optimize effectively. Instead, we propose UDF outlining, a new technique that extracts regions of code irrelevant for query optimization into opaque functions intentionally hidden from the DBMS. In addition to UDF outlining, our optimizing compiler (PRISM) supports four other complementary UDF-centric optimizations.
 By generating simpler queries, we observe that on the Microsoft SQL ProcBench, PRISM provides dramatic performance improvements over inlining entire UDFs.
 
-Our paper has been accepted for publication in VLDB 2025.
+Our paper has been [accepted for publication in VLDB 2025](https://www.vldb.org/pvldb/vol18/p1-arch.pdf).
