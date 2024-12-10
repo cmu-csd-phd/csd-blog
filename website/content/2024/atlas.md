@@ -24,6 +24,7 @@ committee = [
 
 # TL; DR
 - The workload of state-vector quantum circuit simulation is massively parallel. Most quantum gates multiply one small matrix to many vectors, and the workload is balanced.
+- Challenge: the state vector is too large to be stored on one GPU, and the communication cost is very high. We want to keep the computation local.
 - Atlas, using a hierarchical partitioning approach consisting of circuit staging and kernelization (i.e., partitioning the circuit into stages and then into GPU kernels), outperforms state-of-the-art distributed GPU simulators by more than \\(2\times\\).
 - In circuit staging, an ILP algorithm minimizes the number of stages to minimize communication cost.
 - In circuit kernelization, a DP algorithm outperforms previous greedy approaches by allowing for more gate reorderings.
