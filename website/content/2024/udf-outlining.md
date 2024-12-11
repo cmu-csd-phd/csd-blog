@@ -1,6 +1,6 @@
 +++
 title = "The Key to Effective UDF Optimization: Before Inlining, First Perform Outlining"
-date = 2024-08-10
+date = 2024-12-12
 
 [taxonomies]
 areas = ["Systems"]
