@@ -7,7 +7,7 @@ areas = ["Systems"]
 tags = ["database systems", "compiler optimization", "query optimization", "query languages"]
 
 [extra]
-author = {name = "Sam Arch", url = "www.samarch.xyz" }
+author = {name = "Sam Arch", url = "https://www.cs.cmu.edu/~sarch/" }
 committee = [
     {name = "Wan Shen Lim", url = "https://wanshenl.me/"},
     {name = "Phillip Gibbons", url = "https://www.cs.cmu.edu/~gibbons/"},
