@@ -12,7 +12,7 @@ areas = ["Theory"]
 tags = ["Graph Sparsification", "Lower Bound"]
 
 [extra]
-author = {name = "Honghao Lin", url = "honghlin.github.io" }
+author = {name = "Honghao Lin", url = "https://honghlin.github.io/" }
 # The committee specification is a list of objects similar to the author.
 committee = [
     {name = "William Kuszmaul", url = "https://sites.google.com/site/williamkuszmaul"},
