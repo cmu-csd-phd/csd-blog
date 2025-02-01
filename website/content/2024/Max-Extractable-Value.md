@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Maximal Extractable Value in Ethereum"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-05-01
+date = 2024-06-27
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -17,7 +17,7 @@ tags = ["Blockchain", "MEV", "Ethereum","Decentralized Finance (DeFi)", "Mechani
 # For example:
 #   author = "Harry Bovik"
 # However, adding a URL is strongly preferred
-author = "Junxi Song"
+author = {name = "Junxi Song", url = "https://www.linkedin.com/in/junxi-song-218721153/"}
 # The committee specification is simply a list of strings.
 # However, you can also make an object with fields like in the author.
 committee = [
