@@ -54,7 +54,7 @@ main {
     }
 
     blockquote {
-      margin: 2em 0;
+      margin: 0 0;
       padding: 10px 20px;
       position: relative;
       color: rgba(#34495e, 0.8);
@@ -69,18 +69,8 @@ main {
       blockquote {
           margin: 0em 0 2em 0;
       }
-
-
-      blockquote + p {
-          margin: -1.5em 0 0 0;
-          text-align: right;
-      }
     }
 
-    blockquote + p {
-        margin: -1.5em 0 1.5em 0;
-        text-align: right;
-    }
 
     table {
       width: 100%;
