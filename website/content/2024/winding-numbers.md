@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Winding numbers: a topological tool for geometry processing"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2024-12-17
+date = 2025-03-26
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
