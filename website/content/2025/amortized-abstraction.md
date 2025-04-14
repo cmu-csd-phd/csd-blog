@@ -421,7 +421,7 @@ First, `abstraction` preserves `empty`, including cost:
 = []
 = ListQueue.empty ()
 ```
-The proof is the same as [before]((#abstraction-function), but with one extra step to remove the `charge 0` from the definition of `abstraction`.
+The proof is the same as [before](#abstraction-function), but with one extra step to remove the `charge 0` from the definition of `abstraction`.
 Next, `abstraction` preserves `enqueue`:
 ```ocaml,hl_lines=3-5 7
   abstraction (BatchedQueue.enqueue x (inbox, outbox))
