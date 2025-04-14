@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Amortized Analysis as a Cost-Aware Abstraction Function"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-04-03
+date = 2025-04-14
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -51,7 +51,7 @@ module type QUEUE = sig
   val dequeue : t -> int * t
 end
 ```
-To implement `QUEUE`, we must choose a representation type `t`, provide an empty queue of type `t`, and implement the `enqueue` and `dequeue` operations on type `t`.
+To implement `QUEUE`, we must choose a representation type `t` and implement operations on this type `t` to create an empty queue, enqueue an element, and dequeue an element.
 The simplest implementation chooses representation type `t = int list`:
 ```ocaml
 module ListQueue : QUEUE with type t = int list = struct
@@ -85,6 +85,13 @@ While this implementation clearly conveys the intended behavior of a queue, it l
 Therefore, it is best to treat this implementation as a specification only, describing how a more efficient queue ought to be implemented.
 
 For an alternative implementation, sometimes referred to as a [batched queue](https://en.wikipedia.org/wiki/Queue_(abstract_data_type)#Amortized_queue), we can choose the representation type to be pairs of lists, `t = int list * int list`.
+Every queue state is now a pair of lists `inbox, outbox`, where the inbox list is in reverse order.
+A queue can now have more than one representation; for example, the queue containing elements `[1; 2]` can be represented as
+- `[], [1; 2]`,
+- `[2], [1]`, or
+- `[2; 1], []`.
+
+We implement the operations as follows:
 ```ocaml
 module BatchedQueue : QUEUE with type t = int list * int list = struct
   type t = int list * int list
@@ -102,13 +109,6 @@ module BatchedQueue : QUEUE with type t = int list * int list = struct
   ;;
 end
 ```
-Every queue state is now a pair of lists `inbox, outbox`, where the inbox list is in reverse order.
-A queue can now have more than one representation; for example, the queue `[1; 2; 3]` can be represented as
-- `[], [1; 2; 3]`,
-- `[3], [1; 2]`,
-- `[3; 2], [1]`, and
-- `[3; 2; 1], []`.
-
 The empty queue starts with both the inbox and outbox being empty, and the enqueue operation simply adds the new element `x` to the inbox.
 The implementation of the dequeue operation is more complex:
 1. In case the outbox is nonempty (*i.e.*, of the form `x :: outbox`), we dequeue this element `x`, leaving the inbox alone and updating the outbox to the remaining outbox from this list.
@@ -149,7 +149,7 @@ let abstraction : BatchedQueue.t -> ListQueue.t =
 ;;
 ```
 We turn `inbox, outbox` into a single list by appending the reversed `inbox` list to the `outbox` list.
-For example, the pair `[3; 2], [1]` will be mapped by the `abstraction` function to the list `[1; 2; 3]`.
+For example, the pair `[4; 3], [1; 2]` will be mapped by the `abstraction` function to the list `[1; 2; 3; 4]`.
 
 Now, to verify the operations are correct, we must show that the `BatchedQueue` operations cohere with the simpler `ListQueue` operations, mediated by this function, `abstraction`.
 In mathematical parlance, this is called showing that `abstraction` is a *`QUEUE`-homomorphism*.
@@ -199,8 +199,8 @@ In mathematics, when both paths are equivalent, we say that the square *commutes
 <iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsNCxbMSwwLCJcXHRleHR0dHtCUS50fSJdLFswLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMCwxLCJcXHRleHR0dHtMUS50fSJdLFswLDIsIlxcYWxwaGEiXSxbMSwwLCJcXHRleHR0dHtCUS5lbnF1ZXVlIHh9Il0sWzMsMiwiXFx0ZXh0dHR7TFEuZW5xdWV1ZSB4fSIsMl0sWzEsMywiXFxhbHBoYSJdXQ==&embed" width="250" height="250" style="border-radius: 8px; border: none;"></iframe>
   </div>
   <div class="column large">
-<!-- https://q.uiver.app/#q=WzAsNCxbMSwwLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7QlEudH0iXSxbMSwxLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMCwyLCJcXGFscGhhJyJdLFsxLDAsIlxcdGV4dHR0e0JRLmRlcXVldWV9Il0sWzMsMiwiXFx0ZXh0dHR7TFEuZGVxdWV1ZX0iLDJdLFsxLDMsIlxcYWxwaGEiXV0= -->
-<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsNCxbMSwwLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7QlEudH0iXSxbMSwxLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMCwyLCJcXGFscGhhJyJdLFsxLDAsIlxcdGV4dHR0e0JRLmRlcXVldWV9Il0sWzMsMiwiXFx0ZXh0dHR7TFEuZGVxdWV1ZX0iLDJdLFsxLDMsIlxcYWxwaGEiXV0=&embed" width="300" height="250" style="border-radius: 8px; border: none;"></iframe>
+<!-- https://q.uiver.app/#q=WzAsNCxbMSwwLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7QlEudH0iXSxbMSwxLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0xRLnR9Il0sWzAsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMCwyLCJcXGFscGhhJyJdLFsxLDAsIlxcdGV4dHR0e0JRLmRlcXVldWV9Il0sWzMsMiwiXFx0ZXh0dHR7TFEuZGVxdWV1ZX0iLDJdLFsxLDMsIlxcYWxwaGEiXV0= -->
+<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsNCxbMSwwLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0JRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7QlEudH0iXSxbMSwxLCJcXHRleHR0dHtpbnR9IFxcYXN0IFxcdGV4dHR0e0xRLnR9Il0sWzAsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMCwyLCJcXGFscGhhJyJdLFsxLDAsIlxcdGV4dHR0e0JRLmRlcXVldWV9Il0sWzMsMiwiXFx0ZXh0dHR7TFEuZGVxdWV1ZX0iLDJdLFsxLDMsIlxcYWxwaGEiXV0=&embed" width="300" height="250" style="border-radius: 8px; border: none;"></iframe>
   </div>
 </div>
 
@@ -221,8 +221,8 @@ Next, `abstraction` preserves `enqueue`:
 = abstraction (inbox, outbox) @ [ x ]
 = ListQueue.enqueue x (abstraction (inbox, outbox))
 ```
-All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about `List.rev` and the `( @ )` operation.
-We omit the proof that `abstraction` preserves `dequeue`, which goes by cases.
+All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about `List.rev` and the append operation `( @ )`.
+We omit the slightly more involved proof that `abstraction` preserves `dequeue`, which goes by cases following the structure of the `BatchedQueue.dequeue` code.
 
 Observe that the conditions can be combined to relate the results of sequences of operations.
 In our sample trace, we may apply `abstraction` between any two operations, and the result will be unaffected; for example, we may place `abstraction` after the first enqueue as follows, using `BatchedQueue` before this point and `ListQueue` after this point.
@@ -243,8 +243,8 @@ Above the divider, the trace matches that for `BatchedQueue`, and below the divi
 The divider may be moved to any point in the code without changing the final result.
 
 Diagrammatically, such equivalences are visualized as horizontal juxtaposition of commutative squares (omitting `BQ` and `LQ` on operation names for space):
-<!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0JRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ== -->
-<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0JRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
+<!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ== -->
+<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
 
 The path taken in the `demo` code sample is highlighted in red.
 Tracing the data, we see all the possible equivalent paths for `demo` depending on where we choose to place the `abstraction` translation, which moves from the top edge to the bottom edge.
@@ -386,7 +386,6 @@ end
 
 In light of these cost-aware modifications to `BatchedQueue` and `ListQueue`, the existing function `abstraction` no longer meets the criteria for being a valid abstraction function.
 The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations mediated by the `abstraction` conversion; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
-
 For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q). \\]
 While both sides still return the same results, we now have that the left side charges for zero cost (in `BQ.enqueue`), even though the right side claims to charge for one unit of cost (in `LQ.enqueue`).
 To rectify this issue without changing the enqueue implementations, there's only one possible solution: make the `abstraction` function itself charge some cost!
@@ -403,7 +402,7 @@ Now, if we compute the cost of the abstraction function as the potential functio
 In other words: a *cost-aware abstraction function* is a *behavioral abstraction function* equipped with cost according to an amortized analysis *potential function*.
 
 Let's see how this looks in practice.
-We can annotate the abstraction function itself with cost, according to the potential function:
+We can annotate the abstraction function itself with cost, according to the potential function \\( \Phi(\textit{inbox}, \textit{outbox}) = \mathsf{length}(\textit{inbox}) \\) from before:
 ```ocaml,hl_lines=3
 let abstraction : BatchedQueue.t -> ListQueue.t =
   fun (inbox, outbox) ->
@@ -422,6 +421,7 @@ First, `abstraction` preserves `empty`, including cost:
 = []
 = ListQueue.empty ()
 ```
+The proof is the same as [before]((#abstraction-function), but with one extra step to remove the `charge 0` from the definition of `abstraction`.
 Next, `abstraction` preserves `enqueue`:
 ```ocaml,hl_lines=3-5 7
   abstraction (BatchedQueue.enqueue x (inbox, outbox))
@@ -455,8 +455,8 @@ let demo =
 ```
 Regardless of the placement of the switch using `abstraction`, the total cost of this sequence of operations will be `$2`.
 We can again visualize this process as the composition of commutative squares:
-<!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0JRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ== -->
-<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0JRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
+<!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ== -->
+<iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
 
 The [telescoping sum of amortized analysis](#amortized-analysis) is hidden within this composition: rather than add a potential and immediately subtract it afterwards, the overlaying of adjacent uses of \\( \alpha \\) ensures that the intermediate potentials do not contribute to the global tally, computed by the outer edges of the larger rectangle built out of the individual squares.
 For this particular trace, we can view the data as before, annotating arrows with their associated cost:
@@ -469,7 +469,9 @@ Each component square has the same cost associated with both of its paths, and a
 # Conclusion {#conclusion}
 
 In this post, we observed that a potential function used in amortized analysis is precisely the cost incurred by an abstraction function in a setting where cost is viewed as an effect.
-In fact, viewed this way, nothing about the cost effect is special here: using this technique, we can amortize any effects.
-For example, in [the paper](https://entics.episciences.org/14797), we observe that buffered string processing can be framed as amortization, where the potential function serves to flush the buffer.
-While we considered the relatively simple example of batched queues here, the story generalizes to more complex scenarios, such as situations when the amortized cost described is an upper bound only on the true cost (in analogy with physics, data structures that sometimes experience "energy loss").
 Beyond the inherent conceptual benefit of consolidation of ideas, viewing amortized analysis in this way also appears to be immensely practical: when verifying batched queues in [Calf](https://dl.acm.org/doi/abs/10.1145/3498670), the abstraction function perspective reduced the size of the verification from 700 lines of code down to 100 lines.
+
+While we considered the relatively simple example of batched queues here, the story generalizes to more complex scenarios, such as situations when the amortized cost described is an upper bound only on the true cost (in analogy with physics, data structures that sometimes experience "energy loss").
+
+Throughout this development, we didn't use any facts particular to the cost effect; therefore, using this technique, we can amortize any effects using effectful abstraction functions.
+For example, in [the paper](https://entics.episciences.org/14797), we observe that buffered string printing can be framed as amortization, where the potential function serves to flush the buffer.
