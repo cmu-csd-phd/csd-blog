@@ -29,12 +29,16 @@ committee = [
 ]
 +++
 
-
-Amortized analysis is a cost analysis technique for data structures in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a session.
-The semantics of data structures, on the other hand, has long been studied using the notion of abstraction functions, which translate concrete data structure representations into a semantic representation.
+Data structures contain two important aspects that computer scientists seek to verify: behavior and cost.
+The behavior of data structures has long been studied using abstraction functions, which translate concrete data structure representations into a semantic representation.
+On the other hand, the cost associated to a data structure can be analyzed using the method of amortization, a technique in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a session.
 In this post, I will demonstrate how to unify these two techniques, packaging the data associated with an amortized analysis as a cost-aware abstraction function.
 This reframing is more amenable to formal verification, consolidates prior variations of amortized analysis, and generalizes amortization to novel settings.
 This work was published at [MFPS 2024](https://entics.episciences.org/14797).
+
+First, I will introduce an example of a data structure: the batched queue.
+After sketching a proof of the behavioral correctness of this data structure using an abstraction function, I will recall how to use the method of amortization to analyze the cost associated to this data structure.
+Finally, I will describe how to embed the essence of amortized analysis into an abstraction function, thereby creating a unified framework for reasoning about both the behavior and the cost of data structures.
 
 
 # Motivating example: batched queues {#batched-queue}
@@ -67,7 +71,7 @@ module ListQueue : QUEUE with type t = int list = struct
   ;;
 end
 ```
-The empty queue is represented as the empty list `[]`; enqueueing `x` appends the singleton list `[ x ]`; and dequeueing pattern matches on the given list (either empty `[]` or nonempty `x :: l`), returning `0` as a default element when the queue is empty.
+The empty queue is represented as the empty list `[]`; enqueueing `x` uses the `( @ )` function to append the singleton list `[ x ]`; and dequeueing pattern matches on the given list (either empty `[]` or nonempty `x :: l`), returning `0` as a default element when the queue is empty.
 We can run a simple test case to check the behavior of this code as follows:
 ```ocaml
 let demo =
@@ -112,7 +116,7 @@ end
 The empty queue starts with both the inbox and outbox being empty, and the enqueue operation simply adds the new element `x` to the inbox.
 The implementation of the dequeue operation is more complex:
 1. In case the outbox is nonempty (*i.e.*, of the form `x :: outbox`), we dequeue this element `x`, leaving the inbox alone and updating the outbox to the remaining outbox from this list.
-2. If the outbox is empty, we reverse the inbox and treat it as the new outbox. Then, we attempt to take the first element from this new outbox. If the inbox was also empty, we return default element `0` and leave both the inbox and the outbox empty.
+2. If the outbox is empty, we use `List.rev` to reverse the inbox and treat it as the new outbox. Then, we attempt to take the first element from this new outbox. If the inbox was also empty, we return default element `0` and leave both the inbox and the outbox empty.
 
 Compared to `ListQueue`, it is less obvious that `BatchedQueue` correctly implements the queue abstraction.
 We can run the same test case before as a simple check, swapping `ListQueue` for `BatchedQueue`:
@@ -131,7 +135,7 @@ Let's discuss the proof technique that shows how we can verify the correctness o
 Then, we can analyze the cost of `BatchedQueue`.
 
 
-# Abstraction functions {#abstraction-function}
+# Abstraction functions: behavioral verification of data structures {#abstraction-function}
 
 To verify that `BatchedQueue` is correct relative to the specification `ListQueue`, we use an *abstraction function* that converts a batched queue state to a single list representing the same state.
 This venerable idea goes back to Tony Hoare:
@@ -221,7 +225,7 @@ Next, `abstraction` preserves `enqueue`:
 = abstraction (inbox, outbox) @ [ x ]
 = ListQueue.enqueue x (abstraction (inbox, outbox))
 ```
-All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about `List.rev` and the append operation `( @ )`.
+All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about the list reversal function `List.rev` and the append function `( @ )`.
 We omit the slightly more involved proof that `abstraction` preserves `dequeue`, which goes by cases following the structure of the `BatchedQueue.dequeue` code.
 
 Observe that the conditions can be combined to relate the results of sequences of operations.
@@ -253,10 +257,11 @@ Tracing the data, we see all the possible equivalent paths for `demo` depending 
 
 Having proven the correctness of `BatchedQueue` relative to the specification `ListQueue`, let us now turn our attention to analyzing the cost of `BatchedQueue`.
 
-# Cost as an effect {#cost}
+# Cost annotations: cost reified as printing {#cost}
 
 To analyze the cost of a program, we must pin down an intended cost model.
-We may reify the choice of cost model within our code as a printing effect, as in [Calf](https://dl.acm.org/doi/abs/10.1145/3498670):
+This can be done by annotating programs with a primitive, `charge`, that indicates which parts of a program are meant to be thought of as costly.
+We may implement `charge` using printing, displaying `$` symbols at run-time when cost should be counted:
 ```ocaml
 let charge (c : int) : unit = print_string (String.make c '$')
 ```
@@ -298,7 +303,7 @@ However, plotting the total cost of a sequence of queue operations reveals an im
 Even though a linear, \\( n \\)-cost dequeue operation is possible, the frequency of such an operation is inversely proportional to \\( n \\).
 In other words, we can only experience an operation that costs \\( n \\) once after every \\( n \\) enqueue operations.
 Since the total cost of a sequence of operations involving \\( n \\) enqueues is at most \\( n \\), it's almost as though each operation is *constant-time*!
-This observation was made by Tarjan in his seminal paper introducing the method of *amortized cost analysis* for data structures:
+This observation was made by Sleator and Tarjan in their seminal work introducing the method of *amortized cost analysis* for data structures:
 
 > In many uses of data structures, a *sequence of operations*, rather than just a single operation, is performed, and we are *interested in the total time of the sequence*, rather than in the times of the individual operations.
 >
@@ -341,7 +346,8 @@ Formally, this amortization principle may be written as the following conditions
 
 Iterating these equations, we may analyze the total cost of a sequence of operations using a [telescoping sum](https://en.wikipedia.org/wiki/Telescoping_series).
 Let \\( q_i = f_i(f_{i-1}(\cdots(f_0(\texttt{empty ()})))) \\) be the \\(i^\text{th}\\) state in a sequence of states, where \\(f_i\\) is the state transition function underlying the \\(i^\text{th}\\) operation (either `dequeue`, dropping the dequeued element, or `enqueue`).
-As shown by Tarjan, we can bound the total cost of a sequence of operations using the principle of amortization:
+As a matter of notational convenience, let us write \\( \C{f_i(q_i)} \\) for the cost incurred by operation \\( f_i \\) on state \\( q_i \\).
+As shown by Sleator and Tarjan, we can bound the total cost of a sequence of operations using the principle of amortization:
 $$
   \begin{align*}
     n
@@ -358,12 +364,12 @@ We use the fact that the amortization condition for the `empty` operation ensure
 In summary, the amortization principle ensures that the true total cost of a sequence of \\( n \\) operations is at most \\( n \\).
 
 
-# Tarjan meets Hoare: amortized analysis as a cost-aware abstraction function {#consolidation}
+# Cost meets behavior: amortized analysis as a cost-aware abstraction function {#consolidation}
 
 You may have smelled some similarities between [abstraction functions](#abstraction-function) and [potential functions](#amortized-analysis): both are functions with domain `BQ.t` that must satisfy three conditions, one per operation in the `QUEUE` interface.
 Using this observation, we can exhibit the potential functions of amortized analysis as a first-class construct in our programming language.
 
-First, notice that although cost was reified in `BatchedQueue` using the `charge` effect, the amortized cost interface only existed at the level of an external mathematical analysis.
+First, notice that although cost was reified in `BatchedQueue` using the `charge` primitive, the amortized cost interface only existed at the level of an external mathematical analysis.
 Since `ListQueue` already represented the intended behavior of a batched queue, we may as well annotate it with intended amortized costs; that way, client code can treat `ListQueue` as the mental model for `BatchedQueue`, including both behavior and amortized cost.
 Since the only nonzero amortized cost was the \\( 1 \\) cost per enqueue, we annotate as follows:
 ```ocaml,hl_lines=7
@@ -386,7 +392,7 @@ end
 
 In light of these cost-aware modifications to `BatchedQueue` and `ListQueue`, the existing function `abstraction` no longer meets the criteria for being a valid abstraction function.
 The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations mediated by the `abstraction` conversion; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
-For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q). \\]
+For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q), \\] again writing \\( \alpha \\) for the abstraction function, `abstraction`.
 While both sides still return the same results, we now have that the left side charges for zero cost (in `BQ.enqueue`), even though the right side claims to charge for one unit of cost (in `LQ.enqueue`).
 To rectify this issue without changing the enqueue implementations, there's only one possible solution: make the `abstraction` function itself charge some cost!
 If \\( \alpha(\texttt{BQ.enqueue}\ x~q) \\) were to charge \\( c + 1 \\) units of cost and \\( \alpha~q \\) were to charge \\( c \\) units, for any number \\( c \\), the cost of both sides of the equation would balance:
@@ -394,7 +400,7 @@ If \\( \alpha(\texttt{BQ.enqueue}\ x~q) \\) were to charge \\( c + 1 \\) units o
 summing the costs from the components of each side of the abstraction function equation and marking the cost from the abstraction function \\( \alpha \\) in \\( \color{red}\text{red} \\).
 
 Let's make this a bit more precise.
-If the abstraction function were to incur cost \\( \C{\alpha~q} \\), the following condition would have to hold for the enqueue operation:
+If the abstraction function were to incur some amount of cost when applied to a given \\( q \\), which we write \\( \C{\alpha~q} \\), the following condition would have to hold for the enqueue operation:
 \\[ \C{\texttt{BQ.enqueue}\ x~q} + \C{\alpha(\texttt{BQ.enqueue}\ x~q)} = \C{\alpha~q} + \C{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\]
 Since we included the amortized cost specification in `ListQueue`, we have \\( \C{\texttt{LQ.enqueue}\ x~(\alpha~q)} \coloneqq \AC{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\).
 Now, if we compute the cost of the abstraction function as the potential function, \\( \C{\alpha~q} \coloneqq \Phi(q) \\), **the cost aspect of the abstraction function condition is precisely the amortization condition**!
@@ -421,7 +427,7 @@ First, `abstraction` preserves `empty`, including cost:
 = []
 = ListQueue.empty ()
 ```
-The proof is the same as [before](#abstraction-function), but with one extra step to remove the `charge 0` from the definition of `abstraction`.
+The proof is the same as [before](#abstraction-function), but with one extra step to remove the inconsequential `charge 0` from the definition of `abstraction`.
 Next, `abstraction` preserves `enqueue`:
 ```ocaml,hl_lines=3-5 7
   abstraction (BatchedQueue.enqueue x (inbox, outbox))
@@ -468,10 +474,11 @@ Each component square has the same cost associated with both of its paths, and a
 
 # Conclusion {#conclusion}
 
-In this post, we observed that a potential function used in amortized analysis is precisely the cost incurred by an abstraction function in a setting where cost is viewed as an effect.
+In this post, we observed that a potential function used in amortized analysis is precisely the cost incurred by an abstraction function in a setting where cost is reified in programs.
 Beyond the inherent conceptual benefit of consolidation of ideas, viewing amortized analysis in this way also appears to be immensely practical: when verifying batched queues in [Calf](https://dl.acm.org/doi/abs/10.1145/3498670), the abstraction function perspective reduced the size of the verification from 700 lines of code down to 100 lines.
 
 While we considered the relatively simple example of batched queues here, the story generalizes to more complex scenarios, such as situations when the amortized cost described is an upper bound only on the true cost (in analogy with physics, data structures that sometimes experience "energy loss").
 
-Throughout this development, we didn't use any facts particular to the cost effect; therefore, using this technique, we can amortize any effects using effectful abstraction functions.
+Throughout this development, we used the `charge` primitive, viewing cost as a particular form of printing.
+Although we only ever printed the `$` symbol, the approach discussed here scales to arbitrary printing.
 For example, in [the paper](https://entics.episciences.org/14797), we observe that buffered string printing can be framed as amortization, where the potential function serves to flush the buffer.
