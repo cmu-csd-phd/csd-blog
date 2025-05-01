@@ -31,8 +31,8 @@ committee = [
 
 Data structures contain two important aspects that computer scientists seek to verify: behavior and cost.
 The behavior of data structures has long been studied using abstraction functions, which translate concrete data structure representations into a semantic representation.
-On the other hand, the cost associated to a data structure can be analyzed using the method of amortization, a technique in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a session.
-In this post, I will demonstrate how to unify these two techniques, packaging the data associated with an amortized analysis as a cost-aware abstraction function.
+On the other hand, the cost associated to data structures has been analyzed using the method of amortization, a technique in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a sequence of operations.
+In this post, I will demonstrate how to unify these two techniques, packaging the data associated with an amortized analysis as an abstraction function that incorporates cost.
 This reframing is more amenable to formal verification, consolidates prior variations of amortized analysis, and generalizes amortization to novel settings.
 This work was published at [MFPS 2024](https://entics.episciences.org/14797).
 
@@ -75,17 +75,17 @@ The empty queue is represented as the empty list `[]`; enqueueing `x` uses the `
 We can run a simple test case to check the behavior of this code as follows:
 ```ocaml
 let demo =
-  let module Q = ListQueue in
-  let q = Q.empty () in     (* []     *)
-  let q = Q.enqueue 1 q in  (* [1]    *)
-  let q = Q.enqueue 2 q in  (* [1; 2] *)
-  Q.dequeue q               (* 1, [2] *)
+  LQ.empty ()      (* []     *)
+  |> LQ.enqueue 1  (* [1]    *)
+  |> LQ.enqueue 2  (* [1; 2] *)
+  |> LQ.dequeue    (* 1, [2] *)
 ;;
 ```
-Here, letting `Q` be an alias for `ListQueue`, we start with the empty queue `Q.empty ()`, enqueue the numbers `1` and `2`, and then dequeue from the queue.
-Indeed, the dequeued result is `1, [2]`, as expected.
+Here, letting `LQ` be an alias for `ListQueue`, we use the pipe operator `x |> f = f x` to create and interact with a queue.
+We start with the empty queue `LQ.empty ()`, enqueue the numbers `1` and `2`, and then dequeue from the queue.
+Indeed, the dequeued result is `1` with remaining queue `[2]`, as expected.
 
-While this implementation clearly conveys the intended behavior of a queue, it lacks in efficiency: the implementation of the enqueue operation takes linear time in the length of the list `l` representing the queue.
+While this implementation clearly conveys the intended behavior of a queue, it lacks in efficiency: the implementation of the enqueue operation takes linear time in the length of the list representing the queue.
 Therefore, it is best to treat this implementation as a specification only, describing how a more efficient queue ought to be implemented.
 
 For an alternative implementation, sometimes referred to as a [batched queue](https://en.wikipedia.org/wiki/Queue_(abstract_data_type)#Amortized_queue), we can choose the representation type to be pairs of lists, `t = int list * int list`.
@@ -119,14 +119,13 @@ The implementation of the dequeue operation is more complex:
 2. If the outbox is empty, we use `List.rev` to reverse the inbox and treat it as the new outbox. Then, we attempt to take the first element from this new outbox. If the inbox was also empty, we return default element `0` and leave both the inbox and the outbox empty.
 
 Compared to `ListQueue`, it is less obvious that `BatchedQueue` correctly implements the queue abstraction.
-We can run the same test case before as a simple check, swapping `ListQueue` for `BatchedQueue`:
+We can run the same test case before as a simple check, swapping `ListQueue` for `BatchedQueue`, shortened as `BQ`:
 ```ocaml
 let demo =
-  let module Q = BatchedQueue in
-  let q = Q.empty () in     (* [], []       *)
-  let q = Q.enqueue 1 q in  (* [1], []      *)
-  let q = Q.enqueue 2 q in  (* [2; 1], []   *)
-  Q.dequeue q               (* 1, ([], [2]) *)
+  BQ.empty ()      (* [], []       *)
+  |> BQ.enqueue 1  (* [1], []      *)
+  |> BQ.enqueue 2  (* [2; 1], []   *)
+  |> BQ.dequeue    (* 1, ([], [2]) *)
 ;;
 ```
 Here, the result is `1, ([], [2])`, dequeueing element `1` as before and giving a batched queue representing `[2]`, here `([], [2])`.
@@ -211,14 +210,14 @@ In mathematics, when both paths are equivalent, we say that the square *commutes
 In fact, these conditions do hold, which we sketch the proofs of as follows.
 First, `abstraction` preserves `empty`:
 ```ocaml
-  abstraction (BatchedQueue.empty ())
+abstraction (BatchedQueue.empty ())
 = abstraction ([], [])
 = []
 = ListQueue.empty ()
 ```
 Next, `abstraction` preserves `enqueue`:
 ```ocaml
-  abstraction (BatchedQueue.enqueue x (inbox, outbox))
+abstraction (BatchedQueue.enqueue x (inbox, outbox))
 = abstraction (x :: inbox, outbox)
 = outbox @ List.rev (x :: inbox)
 = outbox @ List.rev inbox @ [ x ]  (* lemma *)
@@ -228,19 +227,17 @@ Next, `abstraction` preserves `enqueue`:
 All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about the list reversal function `List.rev` and the append function `( @ )`.
 We omit the slightly more involved proof that `abstraction` preserves `dequeue`, which goes by cases following the structure of the `BatchedQueue.dequeue` code.
 
-Observe that the conditions can be combined to relate the results of sequences of operations.
+Observe that the conditions can be combined to relate the results of sequences of operations, where each successive operation transforms the queue created by the previous one.
 In our sample trace, we may apply `abstraction` between any two operations, and the result will be unaffected; for example, we may place `abstraction` after the first enqueue as follows, using `BatchedQueue` before this point and `ListQueue` after this point.
-```ocaml,hl_lines=5-8
+```ocaml,hl_lines=4-6
 let demo =
-  let module Q = BatchedQueue in
-  let q = Q.empty () in        (* [], []  *)
-  let q = Q.enqueue 1 q in     (* [1], [] *)
+  BQ.empty ()            (* [], []  *)
+  |> BQ.enqueue 1        (* [1], [] *)
   (* ⬆️ batched queue *)
-  let module Q = ListQueue in  (* ------- *)
-  let q = abstraction q in     (* [1]     *)
+  |> abstraction         (* [1]     *)
   (* ⬇️ list queue *)
-  let q = Q.enqueue 2 q in     (* [1; 2]  *)
-  Q.dequeue q                  (* 1, [2]  *)
+  |> LQ.enqueue 2        (* [1; 2]  *)
+  |> LQ.dequeue          (* 1, [2]  *)
 ;;
 ```
 Above the divider, the trace matches that for `BatchedQueue`, and below the divider, the trace matches that for `ListQueue`.
@@ -323,7 +320,7 @@ Then, for a queue represented by a list \\( l \\), we will show that
 
 In other words, a client can imagine these costs when using the batched queue data structure, and while these costs may not be accurate "locally" (for each operation), they will be accurate "globally" (after a sequence of operations).
 
-We now recall the physicist's method of amortized analysis, proposed by Sleator and described in *op. cit*.
+We now recall the physicist's method of amortized analysis, proposed by Sleator and described in the quoted work.
 In this method, one gives a *potential function* \\( \Phi : \texttt{BQ.t} \to \mathbb{N} \\), describing the cost that a client of the batched queue data structure imagines has already occurred, according to the above amortized cost interface.
 Then, each operation on a state \\( q \\) will have license to perform \\( \Phi(q) \\) cost more than what the interface states, since the client has already imagined paying this cost.
 
@@ -421,7 +418,7 @@ The amortization conditions are exactly verified by the [abstraction function cr
 Let's briefly sketch the proofs for `empty` and `enqueue` as follows.
 First, `abstraction` preserves `empty`, including cost:
 ```ocaml,hl_lines=3-4
-  abstraction (BatchedQueue.empty ())
+abstraction (BatchedQueue.empty ())
 = abstraction ([], [])
 = charge 0; []
 = []
@@ -430,7 +427,7 @@ First, `abstraction` preserves `empty`, including cost:
 The proof is the same as [before](#abstraction-function), but with one extra step to remove the inconsequential `charge 0` from the definition of `abstraction`.
 Next, `abstraction` preserves `enqueue`:
 ```ocaml,hl_lines=3-5 7
-  abstraction (BatchedQueue.enqueue x (inbox, outbox))
+abstraction (BatchedQueue.enqueue x (inbox, outbox))
 = abstraction (x :: inbox, outbox)
 = charge (List.length (x :: inbox)); outbox @ List.rev (x :: inbox)
 = charge (1 + List.length inbox); outbox @ List.rev (x :: inbox)
@@ -446,17 +443,15 @@ Since `BatchedQueue.enqueue` prepends `x` to `inbox`, the `abstraction` function
 
 Viewing amortized analysis as a cost-aware abstraction function proof, the reasoning principles afforded by abstraction functions are upgraded to the cost-aware setting accordingly.
 For example, as before, we can switch from using `BatchedQueue` to using `ListQueue` at any point in a sequence of operations and the results will cohere, including the cost (*i.e.*, the number of `$` symbols printed):
-```ocaml,hl_lines=5-8
+```ocaml,hl_lines=4-6
 let demo =
-  let module Q = BatchedQueue in
-  let q = Q.empty () in        (* $0 *)
-  let q = Q.enqueue 1 q in     (* $0 *)
+  BQ.empty ()            (* $0 *)
+  |> BQ.enqueue 1        (* $0 *)
   (* ⬆️ batched queue *)
-  let module Q = ListQueue in
-  let q = abstraction q in     (* $1 *)
+  |> abstraction         (* $1 *)
   (* ⬇️ list queue *)
-  let q = Q.enqueue 2 q in     (* $1 *)
-  Q.dequeue q                  (* $0 *)
+  |> LQ.enqueue 2        (* $1 *)
+  |> LQ.dequeue          (* $0 *)
 ;;
 ```
 Regardless of the placement of the switch using `abstraction`, the total cost of this sequence of operations will be `$2`.
