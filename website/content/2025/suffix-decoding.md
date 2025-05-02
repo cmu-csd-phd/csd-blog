@@ -22,36 +22,53 @@ committee = [
 +++
 
 
-Snowflake has recently unveiled ArcticInference, the fastest speculative decoding solution for vLLM currently available. ArcticInference can reduce the end-to-end latency for **LLM agent tasks** by as much as **4x** and can enhance **open-ended chat completion** workloads by up to **2.8x**.
+Snowflake recently unveiled ArcticInference, the fastest speculative decoding solution for vLLM currently available. ArcticInference can reduce the end-to-end latency for **LLM agent tasks** by up to **4 times** and can improve **open-ended chat completion** workloads by as much as **2.8 times**. A key breakthrough contributing to these performance enhancements is **SuffixDecoding**, a model-free speculation technique based on suffix trees, which I developed during my research internship at Snowflake.
 
 ![Speedup of the ArcticInference Speculator](fig0.png)
 *Figure 1 - Speedup of Llama-3.1-70B-Instruct by the ArcticInference Speculator on a 8xH100 GPU node. Illustration courtesy of Snowflake, Inc.*
 
-A significant breakthrough driving these performance enhancements is **SuffixDecoding**, a model-free speculation technique rooted in suffix trees. I led the SuffixDecoding project during my research internship at Snowflake, and I will provide a comprehensive overview below.
+In this blog post, I will first provide an overview of LLM inference and speculative decoding. Then, I will introduce SuffixDecoding and guide the reader through its use cases, design, and evaluation.
+
+
 
 ## Introduction
 
 The exponential rise in the adoption and integration of large language models (LLMs) into production-grade machine learning systems has catalyzed a transformation in AI-powered applications spanning diverse domains—ranging from open-domain dialogue agents to code synthesis platforms and structured database querying via natural language. Yet, a critical bottleneck persists: high inference latency. This latency substantially hampers the scalability and responsiveness of these applications, especially in latency-sensitive or throughput-constrained deployments.
 
-This article introduces **SuffixDecoding**, a novel, principled, and deployable framework for accelerating LLM inference by leveraging speculative decoding without relying on auxiliary draft models, specialized decoding heads, or any model training. Developed through a research collaboration between Carnegie Mellon University and Snowflake AI Research, SuffixDecoding innovatively employs **suffix trees**—compact data structures constructed from historical LLM outputs—to generate candidate token sequences for speculative verification. The design minimizes GPU memory overhead and avoids the orchestration complexity that accompanies multi-model serving pipelines. Instead, it harnesses the vast and underutilized CPU memory available in modern inference systems to achieve throughput gains and improved latency.
+Speculative decoding has emerged as a promising class of techniques to reduce latency. It involves generating multiple candidate tokens using a lightweight approximation (e.g., a draft model), and then verifying them in a single forward pass using the full model. This speculative mechanism reduces the number of forward passes required per generated token, and since the cost of generating candidate tokens is negligible when compared to that of each forward pass, speculative decoding can significantly cut down the end-to-end generation latency. 
+
+While speculative decoding is quite good for open-ended chat completion tasks, it falls short in scenarios such as **contextually grounded generation** (such as SQL generation),  **agentic tasks**. In contextually-grounded generation, the user provides the LLM with additional information, not previously included in the LLM's training dataset, by incorporating the external knowledge into the prompt, and then prompts the LLM to generate a response based on such context. For instance, the user may use the LLM to perform SQL generation with a provided schema, or use  Retrieval Augmented Generation (RAG) to instruct the LLM to retrieve a question's answer based on the relevant Wikipedia page(s).
+
+Contextually-grounded generation results in a significant degree of overlap between the response and the grounding context, and often also between distinct user queries based on the same grounding context. 
+
+In agentic tasks, the LLM interacts with outside tools (such as bash, python, etc) to perform a task (such as writing code to successfully solve a github issue). LLM agents often involve multiple generation steps, each step further refining the previous steps' output based either on pre-planned instructions or based on the results of running an external tool. This results in a high degree of token overlap between the LLM responses at subsequent steps in the agent pipeline.
+
+Unfortunately, traditional speculative decoding methods are unable to take advantage of these repeated patterns of tokens, which could be used as candidate tokens for the LLM to verify. While one could finetune a speculative draft model, even in an online fashion, to incorporate new context, the time cost of finetuning, low parameter size of the speculator, and operational challenges of finetuning it online make it impractical to specialize the draft model to context that is user- or query-specific. In addition, model-based speculative decoding introduces several engineering and systems challenges, which we will describe below.
+
+### Can we accelerate contextually grounded generation and agentic tasks beyond what is currently supported by speculative decoding?
+
+Motivated by this question, our team at Snowflake AI Research and Carnegie Mellon University has developed **SuffixDecoding**, a novel, principled, and deployable framework for accelerating LLM inference by leveraging speculative decoding without relying on auxiliary draft models, specialized decoding heads, or any model training. SuffixDecoding innovatively employs **suffix trees**—compact data structures constructed from historical LLM outputs—to generate candidate token sequences for speculative verification. The design minimizes GPU memory overhead and avoids the orchestration complexity that accompanies multi-model serving pipelines. Instead, it harnesses the vast and underutilized CPU memory available in modern inference systems to achieve throughput gains and improved latency.
 
 <!-- Figure Placeholder: Overview diagram of SuffixDecoding (Figure 1 from paper) -->
 <!-- ![Overview diagram of SuffixDecoding](fig1.png) -->
-
-
-## Background: Speculative Decoding
+## Background: Autoregressive LLM Inference and Speculative Decoding
 
 Autoregressive decoding in LLMs entails two primary computational phases: (1) a **prefill stage**, wherein the model processes the input context (prompt tokens), and (2) a **decoding stage**, which generates the output tokens sequentially. While the prefill stage can be executed in parallel across tokens, the decoding phase is intrinsically **sequential**, as each new token depends on the full context formed by prior tokens. This sequentiality inhibits parallelism and incurs significant latency for long generations—an issue magnified in multi-agent systems or tasks requiring extensive output generation.
 
-Speculative decoding has emerged as a promising class of techniques to reduce latency. It involves generating multiple candidate tokens using a lightweight approximation (e.g., a draft model), and then verifying them in a single forward pass using the full model. This speculative mechanism reduces the number of forward passes required per generated token. However, model-based speculative decoding introduces several engineering and systems challenges:
+Speculative decoding addresses this limitation by using a draft model to generat multiple candidate tokens at once at a small fraction of the cost that it would take for the LLM to generate them. Then, it uses the LLM to verify them in parallel in a single forward pass. Several techniques have been developed in this space. The **EAGLE** family of speculators uses custom draft models that are trained from the LLM's last transformer layer, together with the embedding and LM head layers.  **Medusa** employs multiple prediction heads on top of the LLM to generate multiple tokens per forward pass. **SpecInfer** uses a smaller draft model to generate a tree of speculative continuations in autoregressive fashion. **REST** combines a draft model with contrastive decoding to improve token acceptance rates. All these approaches share a common limitation: they rely on some form of model-based draft token generation.
 
+Model-based suffix decoding works reasonably well for open-ended chat, but has the following limitations:
 - It necessitates the co-deployment of a secondary draft model, complicating orchestration and introducing tight coupling between model pairs.
 - It increases memory pressure on GPU resources, limiting the room available for KV cache and attention state.
 - It often requires model-specific fine-tuning to align the outputs of the draft model and the full model.
 
-**SuffixDecoding** circumvents these limitations entirely by eliminating the need for any auxiliary model. Instead, it sources speculative candidates from previously observed sequences encoded in suffix trees—enabling speculative decoding with **no additional model inference**.
+### Background: Model-free speculative decoding
+Model-free speculative decoding such as
 
-## Motivation: Agentic Workflows
+
+## Motivation: Why Suffix Decoding?
+
+**SuffixDecoding** circumvents these limitations entirely by eliminating the need for any auxiliary model. Instead, it sources speculative candidates from previously observed sequences encoded in suffix trees—enabling speculative decoding with **no additional model inference**.
 
 Modern **agentic workflows** frequently involve iterative self-reflection loops and multiple reasoning paths, producing outputs with **highly predictable and repetitive patterns**. However, traditional speculative decoding methods typically only predict a few tokens at a time, failing to fully leverage these repetitive structures for acceleration. 
 
@@ -59,7 +76,19 @@ SuffixDecoding addresses this gap by providing a **lightweight speculative appro
 
 The core innovation lies in maintaining a compact cache of previously generated sequences using **suffix trees**—an efficient data structure for indexing and matching repeating token patterns from both historical generations and the current prompt. This optimized structure enables SuffixDecoding to speculate tokens with **remarkable speed** (approximately 20 microseconds per token), facilitating adaptive speculation of **significantly longer sequences** than conventional methods allow.
 
-## How SuffixDecoding Works
+### Agentic Workflow: Solving SWE-Bench tasks with CodeAct
+
+Many off-the-shelves LLMs today have the ability to generate code, but this ability is often limited to solving self-contained tasks, or assisting the user while editing a single source file. To solve more complex programming tasks, many teams have been prototyping AI agents that use an LLM in conjunctions with external tools to interact with the environment. Solving a single software engineering task can however take the agent several minutes or longer, and this can cause a barrier to user interaction and adoption. SuffixDecoding can help to significantly cut back the end-to-end latency of coding tasks, up to 4.5x in our experiments.
+
+To evaluate the effectiveness of SuffixDecoding, we run the CodeAct 2.1 agent with the `all-hands/openhands-lm-32b-v0.1-ep3` LLM on the full SWE-Bench Verified dataset. CodeAct 2.1 is an open-source software development agent designed by OpenHands to solve realistic programming tasks (such as Github issues) by executing Python code as its primary form of action. Unlike agents that rely on structured text or JSON formats, CodeAct embraces executable code to unify the agent’s action space, enabling rich control flow, tool composition, and self-debugging. CodeAct is compatible with closed-source LLMs accessible via API (such as GPT-4o, o3, or Claude Sonnet), as well as open-source models served locally with an inference framework such as vLLM. 
+
+We chose CodeAct as it is one of the best-performing open-source agents on the SWE-bench Verified leaderboard. SWE-bench is a popular and challenging benchmark designed to evaluate the capabilities of language models in realistic software engineering tasks. Unlike traditional code generation tasks, SWE-bench demands cross-file reasoning, long-context understanding, and complex patch generation. SWE-bench Verified is a subset of the SWE-bench suite curated by OpenAI. Each instance of SWE-Bench Verified has been carefully vetted by a team of software developers to ensure that is indeed solvable. Each task in the Verified subset is paired with one or more “fail-to-pass” tests, ensuring that successful patches do not just compile, but also resolve the core issue behaviorally. 
+
+
+### Contextually-grounded generation: Writing SQL for Cortex-Analyst
+
+
+## Design: How does Suffix Decoding work?
 
 ### Step 1: Building Suffix Trees
 
