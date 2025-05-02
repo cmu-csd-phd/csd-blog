@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Leveraging Symmetries in Strategic Games"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-08-13
+date = 2025-05-02
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -23,9 +23,9 @@ committee = [
 
 _The content of this blog post is derived from the research paper [Computing Game Symmetries and Equilibria That Respect Them](https://emanueltewolde.com/files/symmetries.pdf), published at AAAI-25, and authored by Emanuel Tewolde, Brian Hu Zhang, Caspar Oesterheld, Tuomas Sandholm, and Vincent Conitzer._
 
-_TL;DR: We discuss the implications of symmetries in strategic games, using a color coordination game and the Matching Pennies game as running examples. We investigate how hard it is to compute a Nash equilibrium that respects a set of symmetries in a normal-form games, and in which cases we can successfully leverage symmetries to get efficient algorithms. In general games and games with common payoffs, we show that these problems are exactly as hard as Brouwer fixed point and gradient descent problems. In games with a vast number of symmetries or in two-player zero-sum games, on the other hand, we manage to devise polynomial-time algorithms._
+_TL;DR: We discuss the implications of symmetries in strategic games, using a color coordination game and the Matching Pennies game as running examples. We investigate how hard it is to compute a Nash equilibrium that respects a set of symmetries in a normal-form game, and in which cases we can successfully leverage symmetries to get efficient algorithms. We show that these problems are exactly as hard as Brouwer fixed point problems for general games, and gradient descent problems for games with common payoffs. In games with a vast number of symmetries or in two-player zero-sum games, on the other hand, we manage to devise polynomial-time algorithms._
 
-# 1. Let's play a game!
+# 1. Let's Play a Game!
 <p align="center">
 <img src="./coloredlevers.png" alt="A two-player coordination game. If both players pick the same color out of four (red, yellow, blue, green), they each receive the associated utility points, which are 10, 12, 12, and 12. If they miscoordinate, both receive 0 points. Without knowing who you are playing with, what color would you choose?" width="300">
 </p>
@@ -40,8 +40,8 @@ We argue it is not possible to predict consistently how a novel / unknown partne
 
 In this blogpost we investigate how hard it is to compute a Nash equilibrium---the classical and standard solution concept---that respects the symmetries of a game. In Section 2, we will find that the general problem has a comparable computational complexity to finding any Nash equilibrium of a game (symmetries-respecting or not). In Section 3, we will present two important special cases in which we can achieve efficient (polynomial-time) computability.
 
-## Why we care about (respecting) symmetries
-Symmetries are ubiquitous in game theory and multi-agent systems. For one, central concepts such as cooperation, conflict, and coordination are usually presented most simply on symmetric games, such as the Prisoner’s Dilemma, Chicken, and Stag Hunt. Symmetric games can be described more concisely, without enumerating all individual outcomes and payoffs of a game. For example, Matching Pennies can be described as a two-player game where each player picks a heads or tails; if both players pick the same side of a coin, player 1 wins, otherwise, player 2 wins. Such concise descriptions are often helpful when _designing_ games, including their outcome and reward structures. This is done in the fields of social choice and mechanism design, where an abundance of symmetries arises from desirable properties such as anonymity, neutrality, and fairness. Indeed, notions of fairness have been grounded on the idea that any participant (say, human) of the game might be assigned to any player identity (player 1, 2 ...) in the game, which forms a symmetry across participants (_cf._ the “veil of ignorance” philosophy by John Rawls (1971)). For the sake of fairness, one would then like the player identities in the game to be equally strong, as it is the case in the Matching Pennies game. 
+## Why We Care about (Respecting) Symmetries
+Symmetries are ubiquitous in game theory and multi-agent systems. For one, central concepts such as cooperation, conflict, and coordination are usually presented most simply on symmetric games, such as the Prisoner’s Dilemma, Chicken, and Stag Hunt. Symmetric games can be described more concisely, without enumerating all individual outcomes and payoffs of a game. For example, Matching Pennies can be described as a two-player game where each player picks a heads or tails; if both players pick the same side of a coin, player 1 wins, otherwise, player 2 wins. Such concise descriptions are often helpful when _designing_ games, including their outcome and reward structures. This is done in the fields of social choice and mechanism design, where an abundance of symmetries arises from desirable properties such as anonymity, neutrality, and fairness. Indeed, notions of fairness have been grounded on the idea that any participant (say, human) of the game might be assigned to any player identity (player 1, 2 ...) in the game, which forms a symmetry across participants (_cf._ the “veil of ignorance” philosophy by John Rawls 1971). For the sake of fairness, one would then like the player identities in the game to be equally strong, as it is the case in the Matching Pennies game. 
 
 This idea that any participant (AIs, humans, etc.) might take on any player identity in the game (e.g., black versus white in chess) also arises when reasoning about other agents for which we lack priors of their behavior. In fact, from the early days in machine learning, when Samuel (1959) studied the game of checkers, to the more recent superhuman AIs that have tackled the games of Go (Silver _et al._ 2016, 2017), it has been popular to learn good strategies via a technique called _self-play_, which models other players as using the same strategy as oneself. Besides leveraging this player symmetry in chess and Go by always orienting the board from the moving player’s perspective, Silver _et al._ also exploit the rotation and reflection symmetries in Go. Several other general-purpose game solvers achieve state-of-the-art performance, in part, by imposing symmetry equivariances onto their neural network architecture (Marris et al. 2022, Liu et al. 2024)
 
@@ -51,7 +51,7 @@ Last but not least, some strategic interactions may also force symmetric play ac
 
 # 2. Symmetries-Respecting Equilibria
 
-The results we discuss in this blogpost hold for arbitrary finite normal-form games: There is a finite number of players, a finite number of _actions_ per player, and each player has a _utility_ function specifying its utility from any _action profile_, that is, any tuple of actions jointly chosen by all players. For the sake of exposition, however, we will stick to games with two players, in which each player has to choose one of \\(m\\) _actions_. Such games can be represented as a pair of two utility matrices \\(A,B \in \mathbb{R}^{m \times m}\\). For example, the Matching Pennies game we described previously is a game with \\(m=2\\) actions and can be represented as follows:
+The results we discuss in this blogpost hold for arbitrary so-called finite normal-form games: There is a finite number of players, a finite number of _actions_ per player, and all players chose an action simultaneously. Each player has a _utility_ function specifying its utility from any _action profile_, that is, any tuple of actions jointly chosen by all players. For the sake of exposition, however, we will stick to games with two players, in which each player has to choose one of \\(m\\) _actions_. Such games can be represented as a pair of two utility matrices \\(A,B \in \mathbb{R}^{m \times m}\\). For example, the Matching Pennies game we described previously is a game with \\(m=2\\) actions and can be represented as follows:
 <p align="center">
 <img src="./MP.png" alt="The Matching Pennies game." width="300">
 </p>
@@ -113,7 +113,7 @@ The strategy profile space, which is a product of two 3-simplices (since each pl
 
 **Theorem**: In team games, the problem of finding a Nash equilibrium that respects a set of symmetries is CLS-complete. 
 
-# 4. A positive story
+# 4. A Positive Story
 In contrast to the nontrivial (but manageable) complexity in the case of strictly collaborative games, we are able to recover truly efficient algorithms for computing symmetries-respecting Nash equilibria in strictly competitive games. 
 
 **Theorem**: In two-player zero-sum games (\\(A=-B\\)), we can find a Nash equilibrium that respects _all_ symmetries of the game in polynomial time. 
