@@ -21,7 +21,7 @@ committee = [
 ]
 +++
 
-Snowflake recently unveiled ArcticInference, the fastest speculative decoding solution for vLLM currently available. ArcticInference can reduce the end-to-end latency for **LLM agent tasks** by up to **4 times** and can improve **open-ended chat completion** workloads by as much as **2.8 times**. A key breakthrough contributing to these performance enhancements is **SuffixDecoding**, a model-free speculation technique based on suffix trees, which I developed during my research internship at Snowflake.
+Snowflake recently unveiled [ArcticInference](https://www.snowflake.com/en/engineering-blog/fast-speculative-decoding-vllm-arctic/), the fastest speculative decoding solution for vLLM currently available. ArcticInference can reduce the end-to-end latency for **LLM agent tasks** by up to **4 times** and can improve **open-ended chat completion** workloads by as much as **2.8 times**. A key breakthrough contributing to these performance enhancements is [SuffixDecoding](https://arxiv.org/abs/2411.04975), a model-free speculation technique based on suffix trees, which I developed during my research internship at Snowflake.
 
 ![Speedup of the ArcticInference Speculator](fig0.webp)
 *Figure 1 - Speedup of Llama-3.1-70B-Instruct by the ArcticInference Speculator on a 8xH100 GPU node. Illustration courtesy of Snowflake, Inc.*
@@ -51,9 +51,9 @@ What makes SuffixDecoding particularly powerful is its resource efficiency. By s
 Autoregressive decoding in LLMs entails two primary computational phases: (1) a **prefill stage**, wherein the model processes the input context (prompt tokens), and (2) a **decoding stage**, which generates the output tokens sequentially. While the prefill stage can be executed in parallel across tokens, the decoding phase is intrinsically **sequential**, as each new token depends on the full context formed by prior tokens. This sequentiality inhibits parallelism and incurs significant latency for long generations—an issue magnified in multi-agent systems or tasks requiring extensive output generation.
 
 ![Speculative decoding timeline compared to incremental decoding](spec-decoding-timeline.png)
-*Figure 1 - The Speculative Decoding timeline compared to Incremental Decoding. At each step, the draft model is first called to generate a sequence (or a tree) of candidate tokens. Then, the tokens are passed to the LLM for verification in a single forward pass.*
+*Figure 2 - The Speculative Decoding timeline compared to Incremental Decoding. At each step, the draft model is first called to generate a sequence (or a tree) of candidate tokens. Then, the tokens are passed to the LLM for verification in a single forward pass.*
 
-Speculative decoding addresses this limitation by using a draft model to generat multiple candidate tokens at once at a small fraction of the cost that it would take for the LLM to generate them. Then, it uses the LLM to verify them in parallel in a single forward pass. Several techniques have been developed in this space. The **EAGLE** family of speculators uses custom draft models that are trained from the LLM's last transformer layer, together with the embedding and LM head layers. **Medusa** employs multiple prediction heads on top of the LLM to generate multiple tokens per forward pass. **SpecInfer** uses a smaller draft model to generate a tree of speculative continuations in autoregressive fashion. **REST** combines a draft model with contrastive decoding to improve token acceptance rates. All these approaches share a common limitation: they rely on some form of model-based draft token generation.
+Speculative decoding addresses this limitation by using a draft model to generat multiple candidate tokens at once at a small fraction of the cost that it would take for the LLM to generate them. Then, it uses the LLM to verify them in parallel in a single forward pass. Several techniques have been developed in this space. The **EAGLE** family of speculators trains a small model that directly predicts future tokens using features from multiple layers of the main model, improving both accuracy and scalability. **Medusa** adds lightweight parallel heads to the main model itself, allowing it to predict several next tokens in one step without needing a separate draft model. **SpecInfer** builds a tree of possible continuations using a small helper model and verifies the entire tree in parallel, increasing the number of accepted tokens per step. **REST** skips modeling altogether by retrieving likely next tokens from a datastore of past examples, making it easy to use with any language model without additional training. 
 
 Model-based suffix decoding works reasonably well for open-ended chat, but has the following limitations:
 - It necessitates the co-deployment of a secondary draft model, complicating orchestration and introducing tight coupling between model pairs.
@@ -61,7 +61,7 @@ Model-based suffix decoding works reasonably well for open-ended chat, but has t
 - It often requires model-specific fine-tuning to align the outputs of the draft model and the full model.
 
 ### Background: Model-free speculative decoding
-Model-free speculative decoding solutions avoid the overhead of maintaining auxiliary draft models by leveraging alternative techniques to generate speculative tokens. Notable approaches include **n-gram models** [1], which predict next tokens based on statistical patterns in previously observed sequences. **SpecTr** [2] introduces tree-based tokenization with frequency-based prediction. **Lookahead Decoding** [4] uses an efficient substring matching technique on past generations to predict future tokens. These approaches offer compelling advantages in deployment simplicity and reduced memory footprint, though they typically achieve more modest acceptance rates compared to model-based techniques. The key insight unifying these methods is that statistical regularities in language can enable effective speculation without the computational burden of additional neural models.
+Model-free speculative decoding solutions avoid the overhead of maintaining auxiliary draft models by leveraging alternative techniques to generate speculative tokens. Notable approaches include **prompt lookup decoding**, which sources candidate tokens from the prompt. **Lookahead Decoding** generates draft tokens using a Jacobi iteration method. **REST** retrieves draft tokens from a library of external texts. **Token Recycling** builds a cache of possible continuations based on the top-k tokens that are not picked at decoding time. The key insight unifying these methods is that statistical regularities in language can enable effective speculation without the computational burden of additional neural models. However, these methods often lack the adaptability and efficiency of SuffixDecoding, which dynamically leverages historical outputs to exploit repetitive patterns in real-time.
 
 
 ## Motivation: Why Suffix Decoding?
@@ -77,25 +77,24 @@ The core innovation lies in maintaining a compact cache of previously generated 
 ### Agentic Workflow: Solving SWE-Bench tasks with CodeAct
 
 ![The SWE-Bench benchmark workflow](swebench-diagram.png)
-*Figure 2 - The SWE-Bench benchmark workflow. Illustration courtesy of SWE-Bench.*
+*Figure 3 - The SWE-Bench benchmark workflow. Illustration courtesy of SWE-Bench.*
 
-Many off-the-shelves LLMs today have the ability to generate code, but this ability is often limited to solving self-contained tasks, or assisting the user while editing a single source file. To solve more complex programming tasks, many teams have been prototyping AI agents that use an LLM in conjunctions with external tools to interact with the environment. Solving a single software engineering task can however take the agent several minutes or longer, and this can cause a barrier to user interaction and adoption. SuffixDecoding can help to significantly cut back the end-to-end latency of coding tasks, up to 4.5x in our experiments.
+Many off-the-shelves LLMs today have the ability to generate code, but this ability is often limited to solving self-contained tasks, or assisting the user while editing a single source file. To solve more **complex programming tasks**, many teams have been prototyping AI agents that use an LLM in conjunctions with external tools to interact with the environment. Solving a single software engineering task can however take the agent **several minutes** or longer, and this can cause a barrier to user interaction and adoption. SuffixDecoding can help to significantly cut back the end-to-end latency of coding tasks, up to 4.5x in our experiments.
 
-To evaluate the effectiveness of SuffixDecoding, we run the CodeAct 2.1 agent with the `all-hands/openhands-lm-32b-v0.1-ep3` LLM on the full SWE-Bench Verified dataset. CodeAct 2.1 is an open-source software development agent designed by OpenHands to solve realistic programming tasks (such as Github issues) by executing Python code as its primary form of action. Unlike agents that rely on structured text or JSON formats, CodeAct embraces executable code to unify the agent’s action space, enabling rich control flow, tool composition, and self-debugging. CodeAct is compatible with closed-source LLMs accessible via API (such as GPT-4o, o3, or Claude Sonnet), as well as open-source models served locally with an inference framework such as vLLM. 
+To evaluate the effectiveness of SuffixDecoding, we run the [CodeAct 2.1](https://www.all-hands.dev/blog/openhands-codeact-21-an-open-state-of-the-art-software-development-agent) agent with the `all-hands/openhands-lm-32b-v0.1-ep3` LLM on the full [SWE-Bench Verified](https://openai.com/index/introducing-swe-bench-verified/) dataset. CodeAct 2.1 is an open-source software development agent designed by OpenHands to solve **realistic programming tasks** (such as Github issues) by executing Python code as its primary form of action. Unlike agents that rely on structured text or JSON formats, CodeAct embraces executable code to unify the agent’s action space, enabling rich control flow, tool composition, and self-debugging. CodeAct is compatible with closed-source LLMs accessible via API (such as GPT-4o, o3, or Claude Sonnet), as well as open-source models served locally with an inference framework such as vLLM. 
 
-We chose CodeAct as it is one of the best-performing open-source agents on the SWE-bench Verified leaderboard. SWE-bench is a popular and challenging benchmark designed to evaluate the capabilities of language models in realistic software engineering tasks. Unlike traditional code generation tasks, SWE-bench demands cross-file reasoning, long-context understanding, and complex patch generation. SWE-bench Verified is a subset of the SWE-bench suite curated by OpenAI. Each instance of SWE-Bench Verified has been carefully vetted by a team of software developers to ensure that is indeed solvable. Each task in the Verified subset is paired with one or more “fail-to-pass” tests, ensuring that successful patches do not just compile, but also resolve the core issue behaviorally. 
+We chose CodeAct as it is one of the best-performing open-source agents on the **SWE-bench Verified** leaderboard. SWE-bench is a popular and challenging benchmark designed to evaluate the capabilities of language models in realistic software engineering tasks. Unlike traditional code generation tasks, SWE-bench demands cross-file reasoning, long-context understanding, and complex patch generation. SWE-bench Verified is a subset of the SWE-bench suite curated by OpenAI. Each instance of SWE-Bench Verified has been carefully vetted by a team of software developers to ensure that is indeed solvable. Each task in the Verified subset is paired with one or more “fail-to-pass” tests, ensuring that successful patches do not just compile, but also resolve the core issue behaviorally. 
 
 ![End-to-end speedup of CodeAct on the SWE-Bench Verified benchmark](swebench-perf.webp)
-*Figure 2 - End-to-end speedup of CodeAct on the SWE-Bench Verified benchmark. Illustration courtesy of Snowflake, Inc.*
+*Figure 4 - End-to-end speedup of CodeAct on the SWE-Bench Verified benchmark. Illustration courtesy of Snowflake, Inc.*
 
 
 ### Contextually-grounded generation: Writing SQL for Cortex-Analyst
 
 ![The Cortex Analyst multi-stage LLM pipeline](cortex-analyst.png)
-*Figure 3 - Cortex Analyst's multi-stage LLM pipeline workflow. Illustration courtesy of Snowflake, Inc.*
+*Figure 5 - Cortex Analyst's multi-stage LLM pipeline workflow. Illustration courtesy of Snowflake, Inc.*
 
-Cortex Analyst employs a multi-stage LLM pipeline to translate natural language questions into executable SQL code. This pipeline includes several specialized stages: query intent understanding, metadata retrieval, disambiguation, and final code generation. At each step, the LLM is guided by structured context—such as the user’s database schema, column names, data types, and business-specific semantic models—to incrementally refine the query.
-
+[Cortex Analyst](https://www.snowflake.com/en/blog/cortex-analyst-ai-self-service-analytics/) employs a multi-stage LLM pipeline to translate natural language questions into executable SQL code. This pipeline includes several specialized stages: query intent understanding, metadata retrieval, disambiguation, and final code generation. At each step, the LLM is guided by structured context—such as the user’s database schema, column names, data types, and business-specific semantic models—to incrementally refine the query.
 
 Contextually-grounded generation is critical in this pipeline because the final SQL code is not shown to the user for manual review; instead, it is executed directly to return results. Unlike traditional code assistants where placeholders or vague constructs might be acceptable, Cortex Analyst must produce executable, schema-valid code on the first attempt. Any hallucination or misinterpretation—such as referencing a non-existent table or misunderstanding column semantics—would cause execution failures or incorrect results. Thus, precise grounding in the live database context ensures both reliability and safety of the automated analytics process.
 
@@ -114,7 +113,7 @@ Our experiments with Cortex Analyst showed that SuffixDecoding reduced end-to-en
 ## Design: How does Suffix Decoding work?
 
 ![Overview diagram of SuffixDecoding](fig1.png)
-Fig 4 - Overview diagram of SuffixDecoding
+Fig 6 - Overview diagram of SuffixDecoding
 
 ### Step 1: Building Suffix Trees
 
@@ -135,7 +134,7 @@ SuffixDecoding employs a **greedy expansion algorithm** to construct a **specula
 ### Step 3: Tree-Based Verification
 
 ![Overview diagram of SuffixDecoding](tree-based-verification.png)
-Fig X - Overview diagram of Tree-Based Verification in a single forward pass
+Fig 7 - Overview diagram of Tree-Based Verification in a single forward pass
 
 The constructed speculation tree is then passed to the LLM, which verifies the candidate tokens in a single forward pass using a topology-aware causal attention mask. Tokens that align with the model's actual outputs are accepted and appended to the generated sequence. Unverified tokens are discarded, and decoding resumes from the point of acceptance.
 
@@ -179,11 +178,14 @@ Baseline comparisons include:
 SuffixDecoding consistently improves performance across diverse tasks:
 
 - On AgenticSQL, a multi-stage text-to-SQL application, it achieves **up to 2× higher throughput** and **2.2× lower time-per-token (TPOT) latency** compared to SpecInfer.
-- On open-ended chat (WildChat) and code generation (Magicoder) tasks, it attains up to **2× higher throughput** than SpecInfer, with competitive performance despite using only a small fraction of the data required to train a draft model.
+- On open-ended chat (WildChat) and code generation (Magicoder) tasks, it attains up to **1.2× higher throughput** than SpecInfer, with competitive performance despite using only a small fraction of the data required to train a draft model.
 - Acceptance rates remain robust across tasks, and SuffixDecoding introduces **no additional GPU cost**, leveraging CPU memory and tree-based pattern matching for candidate generation.
 
 ![Throughput and TPOT of SuffixDecoding](throughput-tpot.png)
-Figure X: SuffixDecoding compared to baselines. TOP: generation throughput. BOTTOM: Per-request TPOT.
+Figure 8: SuffixDecoding compared to baselines. TOP: generation throughput. BOTTOM: Per-request TPOT.
+
+![Speculation stats](table-results.png)
+Table 1: Speculation stats for different decoding methods. SD-T: SuffixDecoding with tree speculation; SD-L: SuffixDecoding with linear speculation; SPEC-1B and SPEC-8B: Tree-Based decoding with SpecInfer using, respectively, LLAMA-3.2-1B and LLAMA-3.1-8B.
 
 ## Ablation Studies and Insights
 
@@ -193,7 +195,7 @@ We performed a detailed ablation to quantify the contribution of global and per-
 
 <!-- Figure Placeholder: Ablation speedup comparison (Figure 7) -->
 ![Ablation Speedup](ablation-speedup.png)
-*Figure X - Speedup factor and number of speculated tokens for the tasks in AgenticSQL. SuffixDecoding was run with only the global suffix tree, only the per-request suffix tree, and both (baseline)*
+*Figure 9 - Speedup factor and number of speculated tokens for the tasks in AgenticSQL. SuffixDecoding was run with only the global suffix tree, only the per-request suffix tree, and both (baseline)*
 
 ### Suffix Tree Size and Performance Scaling
 
@@ -205,14 +207,14 @@ We evaluated SuffixDecoding with global suffix trees ranging from **256 to 10,00
 Acceptance rates remain largely unaffected by corpus size, suggesting that speculation quality degrades gracefully even with limited reference data.
 
 ![Speedup vs tree size](speedup-vs-tree-size.png)
-*Figure X - Speedup (left) and acceptance rate (right) vs global suffix tree size for Magicoder and Wildchat*
+*Figure 10 - Speedup (left) and acceptance rate (right) vs global suffix tree size for Magicoder and Wildchat*
 
 ### Online Adaptation to Input Distribution Shifts
 
 To test adaptability, we evaluated SuffixDecoding trained on WildChat outputs and deployed on SpiderSQL queries—representing a substantial distributional shift. Despite the mismatch, SuffixDecoding retained **1.5× speedup** and adapted rapidly. After ingesting 500 SpiderSQL responses into the suffix tree, it matched the performance of a model trained offline on SpiderSQL.
 
 ![The online adaptation performance of Suffix Decoding](online-adaptation.png)
-*Figure X - The performance of SuffixDecoding under input distribution shift. SuffixDecoding was trained on outputs from WildChat, while being evaluated on SpiderSQL. X axis: the number of SpiderSQL inputs, which are added to the global suffix tree after they are processed. Red line: the performance of SuffixDecoding if trained on 500 output examples from only SpiderSQL offline*
+*Figure 11 - The performance of SuffixDecoding under input distribution shift. SuffixDecoding was trained on outputs from WildChat, while being evaluated on SpiderSQL. X axis: the number of SpiderSQL inputs, which are added to the global suffix tree after they are processed. Red line: the performance of SuffixDecoding if trained on 500 output examples from only SpiderSQL offline*
 
 ## Why It Matters
 
@@ -233,160 +235,18 @@ Stay tuned as we continue to investigate how to push the boundaries of efficient
 
 
 ## References
-- Rush, A. M. (2023). Accelerating Large Language Model Decoding with n-gram Speculative Decoding.
-- Xia, P. et al. (2023). SpecTr: Fast Speculative Decoding via Optimal Transport.
-- Cai, H. et al. (2023). Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads.
-- Xu, H. et al. (2023). Lookahead Speculative Decoding.
-<!-- # Section Heading
-
-## Subsection Heading
-
-Some text.
-
-## Another Subsection Heading
-
-Some more text.
-You can write lines
-separately
-and it'll still
-be considered
-a single paragraph. Paragraphs are separated by a
-blank line.
-
-# Another Section
-
-You can **bold** things by wrapping them in two asterisks/stars. You
-can _italicise_ things by wrapping them in underscores. You can also
-include inline `code` which is done by wrapping with backticks (the
-key likely to the left of the 1 on your keyboard).
-
-If you want to add larger snippets of code, you can add triple
-backticks around them, like so:
-
-```
-this_is_larger = true;
-show_code(true);
-```
-
-However, the above doesn't add syntax highlighting. If you want to do
-that, you need to specify the specific language on the first line, as
-part of the backticks, like so:
-
-```c
-#include <stdio.h>
-
-int main() {
-   printf("Hello World!");
-   return 0;
-}
-```
-
-If you want to quote someone, simply prefix whatever they said with a
-`>`. For example:
-
-> If it is on the internet, it must be true.
-
--- Abraham Lincoln
-
-You can also nest quotes:
-
-> > You miss 100% of the shots you don't take
->
-> -- Wayne Gretzky
-
--- Michael Scott
-
-Every paragraph _immediately_ after a quote is automatically right
-aligned and pressed up against the quote, since it is assumed to be
-the author/speaker of the quote. You can suppress this by adding a
-`<p></p>` right after a quote, like so:
-
-> This is a quote, whose next para is a normal para, rather than an
-> author/speaker
-
-<p></p>
-
-This paragraph is perfectly normal, rather than being forced
-right. Additionally, you could also add a `<br />` right beside the
-`<p></p>` to give some more breathing room between the quote and the
-paragraph.
-
-In the author notifications above, btw, note how the double-hyphen
-`--` automatically becomes the en-dash (--) and the triple-hyphen
-`---` automatically becomes the em-dash (---). Similarly, double- and
-single-quotes are automagically made into "smart quotes", and the
-ellipsis `...` is automatically cleaned up into an actual ellipsis...
-
----
-
-You can add arbitrary horizontal rules by simply placing three hyphens
-on a line by themselves.
-
----
-
-Of course, you can write \\( \LaTeX \\) either inline by placing stuff
-within `\\(` and `\\)` markers, or as a separate equation-style LaTeX
-output by wrapping things in `\\[` and `\\]`:
-
-\\[ \sum_{n_1 \in \N} \frac{n_1}{n_2} \\]
-
-Alternatively, you can wrap it inside of a pair of double-dollar signs
-`$$`:
-
-$$ \frac{\Phi \in \psi}{\psi \rightarrow \xi} $$
-
-Single dollar signs unfortunately do not work for inline LaTeX.
-
-# More fun!
-
-Of course, you can add links to things, by using the right syntax. For
-example, [here is a link to NASA](https://www.nasa.gov/). Standard
-HTML-like shenanigans, such as appending a `#anchor` to the end of the
-link also work. Relative links within the website also work.
-
-You can also use the links to link back to parts of the same
-blogpost. For this, you need to find the "slug" of the section. For
-this, you can force a slug at the section heading, and then simply
-refer to it, like the [upcoming section](#finale), or alternatively,
-you can take the lowercase version of all the parts of a section and
-place hyphens between them, like [this](#more-fun) or
-[this](#another-section).
-
-Pictures, of course, can be added. The best way to do this is to
-utilize relative links (just add images into the right directory, see
-the main `README` file in this repository to learn where it should
-go), but you can link to external images too in the same way. For
-example,
-
-![i are serious cat](https://upload.wikimedia.org/wikipedia/commons/4/44/CatLolCatExample.jpg)
-
-Of course, it is good etiquette to add alt-text to your images, like
-has been done in the previous image, with "i are serious cat". It
-helps with accessibility.
-
-Images are automatically shown at a reasonable size by limiting their
-maximum width. If you have a particularly tall image, you might have
-to do some manipulation yourself though. Images should also
-automatically work properly in mobile phones :)
-
----
-
-Do you want some tables? Here are some tables:
-
-
-| Header 1   | Another header here   | This is a long header |
-|:---------- | ---------------------:|:---------------------:|
-| Some data  | Some more data        | data \\( \epsilon \\) |
-| data       | Some _long_ data here | more data             |
-| align left |   right               | center                |
-
-You use the `:` specifier in the table header-body splitting line to
-specify whether the particular column should be left, center, or right
-aligned. All the standard markdown elements continue to work within
-the table, so feel free to use them.
-
-# Finale {#finale}
-
-Finally, you're at the end of your blogpost! Your name will appear
-again at the end automatically, as will the committee members who will
-(hopefully) approve your blogpost with no changes! Good luck! -->
+- Cai, T. et al. (2024). Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads.
+- Chowdhury, N. et al. (2024). Introducing SWE-bench Verified.
+- Forero, J. et al. (2024). Cortex Analyst: Paving the Way to Self-Service Analytics with AI.
+- Fu, Y. et al. (2024). Break the Sequential Dependency of LLM Inference Using Lookahead Decoding.
+- Jimenez, C. et al. (2023). SWE-bench: Can Language Models Resolve Real-World GitHub Issues?
+- Li, Y. et al. (2024). EAGLE-2: Faster Inference of Language Models with Dynamic Draft Trees.
+- Li, Y. et al. (2025). EAGLE-3: Scaling up Inference Acceleration of Large Language Models via Training-Time Test.
+- Luo, X. et al. (2024). Turning Trash into Treasure: Accelerating Inference of Large Language Models with Token Recycling.
+- Miao, X. et al. (2024). SpecInfer: Accelerating Generative Large Language Model Serving with Tree-based Speculative Inference and Verification.
+- Oliaro, G. et al. (2024). SuffixDecoding: A Model-Free Approach to Speeding Up Large Language Model Inference.
+- Saxena, A. (2024). Prompt Lookup Decoding.
+- Sun, Z. et al. (2023). SpecTr: Fast Speculative Decoding via Optimal Transport.
+- Wang, X. et al. (2024). Executable Code Actions Elicit Better LLM Agents.
+- Wang, Y. et al. (2025). Fastest Speculative Decoding in vLLM with Arctic Inference and Arctic Training.
+- Zhao, Y. et al. (2024). Lookahead: An Inference Acceleration Framework for Large Language Model with Lossless Generation Accuracy.
