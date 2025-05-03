@@ -257,13 +257,15 @@ Having proven the correctness of `BatchedQueue` relative to the specification `L
 # Cost annotations: cost reified as printing {#cost}
 
 To analyze the cost of a program, we must pin down an intended cost model.
-This can be done by annotating programs with a primitive, `charge`, that indicates which parts of a program are meant to be thought of as costly.
+Rather than use a machine-dependent notion of cost, we can reify an abstract notion of cost into programs themselves.
+This can be accomplished by annotating programs with a primitive, `charge`, that indicates which parts of a program are meant to be thought of as costly.
 We may implement `charge` using printing, displaying `$` symbols at run-time when cost should be counted:
 ```ocaml
 let charge (c : int) : unit = print_string (String.make c '$')
 ```
 Evaluating `charge c` will print out `c` many `$` symbols, akin to incrementing a global counter by `c`.
 We may now instrument our programs with this `charge` function wherever we wish to track cost.
+Then, instead of using a stopwatch to time the execution of a program, we simply count the number of `$` symbols printed to determine the abstract cost spent.
 
 In our running batched queue example, let us choose our cost model to be the number of recursive calls made; under this scheme, `List.rev inbox` should charge `List.length inbox` cost, as indicated in the modified code below.
 ```ocaml,hl_lines=12
