@@ -266,6 +266,7 @@ let charge (c : int) : unit = print_string (String.make c '$')
 Evaluating `charge c` will print out `c` many `$` symbols, akin to incrementing a global counter by `c`.
 We may now instrument our programs with this `charge` function wherever we wish to track cost.
 Then, instead of using a stopwatch to time the execution of a program, we simply count the number of `$` symbols printed to determine the abstract cost spent.
+Note that the use of `charge` does not otherwise impact the behavior of a computation.
 
 In our running batched queue example, let us choose our cost model to be the number of recursive calls made; under this scheme, `List.rev inbox` should charge `List.length inbox` cost, as indicated in the modified code below.
 ```ocaml,hl_lines=12
@@ -473,6 +474,7 @@ Each component square has the same cost associated with both of its paths, and a
 
 In this post, we observed that a potential function used in amortized analysis is precisely the cost incurred by an abstraction function in a setting where cost is reified in programs.
 Beyond the inherent conceptual benefit of consolidation of ideas, viewing amortized analysis in this way also appears to be immensely practical: when verifying batched queues in [Calf](https://dl.acm.org/doi/abs/10.1145/3498670), the abstraction function perspective reduced the size of the verification from 700 lines of code down to 100 lines.
+Moreover, this perspective on amortized analysis is compatible with programming languages for automated resource analysis, such as [AARA](https://www.cambridge.org/core/journals/mathematical-structures-in-computer-science/article/two-decades-of-automatic-amortized-resource-analysis/9A47A8663CD8A7147E2F17865C368094).
 
 While we considered the relatively simple example of batched queues here, the story generalizes to more complex scenarios, such as situations when the amortized cost described is an upper bound only on the true cost (in analogy with physics, data structures that sometimes experience "energy loss").
 
