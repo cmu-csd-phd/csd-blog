@@ -31,21 +31,21 @@ committee = [
 
 Data structures contain two important aspects that computer scientists seek to verify: behavior and cost.
 The behavior of data structures has long been studied using abstraction functions, which translate concrete data structure representations into a semantic representation.
-On the other hand, the cost associated to data structures has been analyzed using the method of amortization, a technique in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a sequence of operations.
+On the other hand, the cost associated with data structures has been analyzed using the method of amortization, a technique in which cost is studied in aggregate: rather than considering the maximum cost of a single operation, one bounds the total cost encountered throughout a sequence of operations.
 In this post, I will demonstrate how to unify these two techniques, packaging the data associated with an amortized analysis as an abstraction function that incorporates cost.
 This reframing is more amenable to formal verification, consolidates prior variations of amortized analysis, and generalizes amortization to novel settings.
 This work was published at [MFPS 2024](https://entics.episciences.org/14797).
 
-First, I will introduce an example of a data structure: the batched queue.
-After sketching a proof of the behavioral correctness of this data structure using an abstraction function, I will recall how to use the method of amortization to analyze the cost associated to this data structure.
+First, I will introduce an example data structure: the batched queue.
+After sketching a proof of the behavioral correctness of this data structure using an abstraction function, I will review how to use the method of amortization to analyze the cost associated to this data structure.
 Finally, I will describe how to embed the essence of amortized analysis into an abstraction function, thereby creating a unified framework for reasoning about both the behavior and the cost of data structures.
 
 
 # Motivating example: batched queues {#batched-queue}
 
-To keep our discussion concrete, let's use a concrete choice of amortized data structure as a running example in this post: the *batched queue*, which we introduce in this section.
+To keep our discussion concrete, let's use a concrete choice of amortized data structure as a running example in this post: the *batched queue*.
 Setting the scene, consider the [queue](https://en.wikipedia.org/wiki/Queue_(abstract_data_type)) abstract data type, which describes finite lists of data that can be "enqueued" to and "dequeued" from in a first-in, first-out manner.
-This description of operations can be given the following types:
+This description of operations can be given the following types, written in [OCaml syntax](https://ocaml.org/manual/latest/index.html):
 ```ocaml
 module type QUEUE = sig
   type t
@@ -296,7 +296,7 @@ Now, with a `charge`-annotated program, the problem of cost analysis can be pose
 
 At first glance, the `BatchedQueue` implementation does not look particularly efficient.
 Although we treat `empty` and `enqueue` as having zero cost, the worst-case cost incurred by `dequeue` is linear in the number of elements stored in the queue.
-However, plotting the total cost of a sequence of queue operations reveals an important property:
+However, plotting the total cost of a sequence of queue operations reveals an important property.
 
 <img src="./queue.png" alt="plot showing the total cost over time, which is always upper bounded by the total number of enqueue operations performed" style="display: block; margin-left: auto; margin-right: auto;">
 
@@ -336,7 +336,7 @@ The potential function must satisfy a property akin to the [law of conservation 
 where \\( \text{AC} \\) is the amortized cost of the operation, \\( \text{C} \\) is the true cost of the operation, \\( \Phi \\) is the potential of the state before the operation, and \\( \Phi^\prime \\) is the potential of the state after the operation.
 Rephrased as
 \\[ \Phi + \text{AC} = \text{C} + \Phi^\prime, \\]
-this equation is exactly the conservation of energy, where the potentials \\( \Phi \\)/\\( \Phi^\prime \\) play the role of the potential energy of a physical system before/after a time elapses and the true/amortized cost play the role of the kinetic energy.
+this equation is exactly the conservation of energy, where the potentials \\( \Phi \\)/\\( \Phi^\prime \\) play the role of the potential energy of a physical system before/after a time elapses and the true/amortized cost play the role of the expended energy.
 
 Let \\( \C{e} \\) represent be the cost associated with computing the result of the operation \\( e \\).
 Formally, this amortization principle may be written as the following conditions on the function \\( \Phi \\), one per operation in the `QUEUE` interface:
