@@ -145,27 +145,21 @@ This venerable idea goes back to Tony Hoare:
 > Thus there is no unique concrete value representing any abstract one.
 > <div style="text-align: right"> &ndash;Hoare, 1972, <a href="https://dl.acm.org/doi/abs/10.5555/63445.C1104363">Proof of Correctness of Data Representations</a> </div>
 
-For our example, we can implement the abstraction function as follows, rendering \\( \alpha \\) as `abstraction` in code:
+For our example, we can implement the abstraction function as follows, rendering \\( \alpha \\) as `alpha` in code:
 ```ocaml
-let abstraction : BatchedQueue.t -> ListQueue.t =
+let alpha : BatchedQueue.t -> ListQueue.t =
   fun (inbox, outbox) -> outbox @ List.rev inbox
 ;;
 ```
 We turn `inbox, outbox` into a single list by appending the reversed `inbox` list to the `outbox` list.
-For example, the pair `[4; 3], [1; 2]` will be mapped by the `abstraction` function to the list `[1; 2; 3; 4]`.
+For example, the pair `[4; 3], [1; 2]` will be mapped by the `alpha` function to the list `[1; 2; 3; 4]`.
 
-Now, to verify the operations are correct, we must show that the `BatchedQueue` operations cohere with the simpler `ListQueue` operations, mediated by this function, `abstraction`.
-In mathematical parlance, this is called showing that `abstraction` is a *`QUEUE`-homomorphism*.
+Now, to verify the operations are correct, we must show that the `BatchedQueue` operations cohere with the simpler `ListQueue` operations, mediated by this function, `alpha`.
+In mathematical parlance, this is called showing that `alpha` is a *`QUEUE`-homomorphism*.
 Let us abbreviate `BatchedQueue` as `BQ` and `ListQueue` as `LQ`; concretely, this means checking the following conditions, one per operation in the `QUEUE` interface:
 1. \\( \alpha(\texttt{BQ.empty ()}) = \texttt{LQ.empty ()} \\),
 2. \\( \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q) \\) for all \\( q : \texttt{BQ.t} \\), and
 3. \\( \alpha^\prime(\texttt{BQ.dequeue}\ q) = \texttt{LQ.dequeue}\ (\alpha~q) \\) for all \\( q : \texttt{BQ.t} \\), where \\( \alpha^\prime(x, q^\prime) = (x, \alpha(q^\prime)) \\) applies the abstraction function to the second component of a pair of type \\( \texttt{int * BQ.t} \\).
-
-<!--
-1. `abstraction (BatchedQueue.empty ())` = `ListQueue.empty ()`,
-2. `abstraction (BatchedQueue.enqueue x q)` = `ListQueue.enqueue x (abstraction q)` for all `q : BatchedQueue.t`, and
-3. `abstraction' (BatchedQueue.dequeue q)` = `ListQueue.dequeue (abstraction q)` for all `q : BatchedQueue.t`, where `abstraction' = fun (x, q') -> (x, abstraction q')` applies the `abstraction` function to the second component of a pair `int * BatchedQueue.t`.
--->
 
 These conditions can be visualized using the following diagrams.
 Each square represents one of the above equations, stating that the two paths (right/down ↴ and down/right ↳) are equivalent.
@@ -208,33 +202,33 @@ In mathematics, when both paths are equivalent, we say that the square *commutes
 </div>
 
 In fact, these conditions do hold, which we sketch the proofs of as follows.
-First, `abstraction` preserves `empty`:
+First, `alpha` preserves `empty`:
 ```ocaml
-abstraction (BatchedQueue.empty ())
-= abstraction ([], [])
+alpha (BatchedQueue.empty ())
+= alpha ([], [])
 = []
 = ListQueue.empty ()
 ```
-Next, `abstraction` preserves `enqueue`:
+Next, `alpha` preserves `enqueue`:
 ```ocaml
-abstraction (BatchedQueue.enqueue x (inbox, outbox))
-= abstraction (x :: inbox, outbox)
+alpha (BatchedQueue.enqueue x (inbox, outbox))
+= alpha (x :: inbox, outbox)
 = outbox @ List.rev (x :: inbox)
 = outbox @ List.rev inbox @ [ x ]  (* lemma *)
-= abstraction (inbox, outbox) @ [ x ]
-= ListQueue.enqueue x (abstraction (inbox, outbox))
+= alpha (inbox, outbox) @ [ x ]
+= ListQueue.enqueue x (alpha (inbox, outbox))
 ```
 All steps follow by unfolding definitions, aside from the line indicated, which uses a lemma about the list reversal function `List.rev` and the append function `( @ )`.
-We omit the slightly more involved proof that `abstraction` preserves `dequeue`, which goes by cases following the structure of the `BatchedQueue.dequeue` code.
+We omit the slightly more involved proof that `alpha` preserves `dequeue`, which goes by cases following the structure of the `BatchedQueue.dequeue` code.
 
 Observe that the conditions can be combined to relate the results of sequences of operations, where each successive operation transforms the queue created by the previous one.
-In our sample trace, we may apply `abstraction` between any two operations, and the result will be unaffected; for example, we may place `abstraction` after the first enqueue as follows, using `BatchedQueue` before this point and `ListQueue` after this point.
+In our sample trace, we may apply `alpha` between any two operations, and the result will be unaffected; for example, we may place `alpha` after the first enqueue as follows, using `BatchedQueue` before this point and `ListQueue` after this point.
 ```ocaml,hl_lines=4-6
 let demo =
   BQ.empty ()            (* [], []  *)
   |> BQ.enqueue 1        (* [1], [] *)
   (* ⬆️ batched queue *)
-  |> abstraction         (* [1]     *)
+  |> alpha         (* [1]     *)
   (* ⬇️ list queue *)
   |> LQ.enqueue 2        (* [1; 2]  *)
   |> LQ.dequeue          (* 1, [2]  *)
@@ -248,7 +242,7 @@ Diagrammatically, such equivalences are visualized as horizontal juxtaposition o
 <iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
 
 The path taken in the `demo` code sample is highlighted in red.
-Tracing the data, we see all the possible equivalent paths for `demo` depending on where we choose to place the `abstraction` translation, which moves from the top edge to the bottom edge.
+Tracing the data, we see all the possible equivalent paths for `demo` depending on where we choose to place the `alpha` translation, which moves from the top edge to the bottom edge.
 <!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7MSwoW10sWzJdKX0iXSxbMiwwLCJcXHRleHR0dHtbMV0sW119Il0sWzQsMSwiXFx0ZXh0dHR7MSxbMl19Il0sWzIsMSwiXFx0ZXh0dHR7WzFdfSJdLFswLDAsIlxcdGV4dHR0eygpfSJdLFswLDEsIlxcdGV4dHR0eygpfSJdLFsxLDAsIlxcdGV4dHR0e1tdLFtdfSJdLFsxLDEsIlxcdGV4dHR0e1tdfSJdLFszLDAsIlxcdGV4dHR0e1syOzFdLFtdfSJdLFszLDEsIlxcdGV4dHR0e1sxOzJdfSJdLFswLDJdLFsxLDMsIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzQsNSwiIiwwLHsic3R5bGUiOnsiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFs0LDYsIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzUsN10sWzcsM10sWzYsMSwiIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19XSxbNiw3XSxbOCwwXSxbOSwyLCIiLDAseyJjb2xvdXIiOlswLDYwLDYwXX1dLFsxLDhdLFszLDksIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzgsOV1d -->
 <iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7MSwoW10sWzJdKX0iXSxbMiwwLCJcXHRleHR0dHtbMV0sW119Il0sWzQsMSwiXFx0ZXh0dHR7MSxbMl19Il0sWzIsMSwiXFx0ZXh0dHR7WzFdfSJdLFswLDAsIlxcdGV4dHR0eygpfSJdLFswLDEsIlxcdGV4dHR0eygpfSJdLFsxLDAsIlxcdGV4dHR0e1tdLFtdfSJdLFsxLDEsIlxcdGV4dHR0e1tdfSJdLFszLDAsIlxcdGV4dHR0e1syOzFdLFtdfSJdLFszLDEsIlxcdGV4dHR0e1sxOzJdfSJdLFswLDJdLFsxLDMsIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzQsNSwiIiwwLHsic3R5bGUiOnsiaGVhZCI6eyJuYW1lIjoibm9uZSJ9fX1dLFs0LDYsIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzUsN10sWzcsM10sWzYsMSwiIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19XSxbNiw3XSxbOCwwXSxbOSwyLCIiLDAseyJjb2xvdXIiOlswLDYwLDYwXX1dLFsxLDhdLFszLDksIiIsMCx7ImNvbG91ciI6WzAsNjAsNjBdfV0sWzgsOV1d&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
 
@@ -390,11 +384,11 @@ module ListQueue : QUEUE with type t = int list = struct
 end
 ```
 
-In light of these cost-aware modifications to `BatchedQueue` and `ListQueue`, the existing function `abstraction` no longer meets the criteria for being a valid abstraction function.
-The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations mediated by the `abstraction` conversion; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
-For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q), \\] again writing \\( \alpha \\) for the abstraction function, `abstraction`.
+In light of these cost-aware modifications to `BatchedQueue` and `ListQueue`, the existing function `alpha` no longer meets the criteria for being a valid abstraction function.
+The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations mediated by the `alpha` conversion; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
+For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q), \\] again writing \\( \alpha \\) for the abstraction function, `alpha`.
 While both sides still return the same results, we now have that the left side charges for zero cost (in `BQ.enqueue`), even though the right side claims to charge for one unit of cost (in `LQ.enqueue`).
-To rectify this issue without changing the enqueue implementations, there's only one possible solution: make the `abstraction` function itself charge some cost!
+To rectify this issue without changing the enqueue implementations, there's only one possible solution: make the `alpha` function itself charge some cost!
 If \\( \alpha(\texttt{BQ.enqueue}\ x~q) \\) were to charge \\( c + 1 \\) units of cost and \\( \alpha~q \\) were to charge \\( c \\) units, for any number \\( c \\), the cost of both sides of the equation would balance:
 \\[ 0 + {\color{red}(c + 1)} = {\color{red}c} + 1, \\]
 summing the costs from the components of each side of the abstraction function equation and marking the cost from the abstraction function \\( \alpha \\) in \\( \color{red}\text{red} \\).
@@ -410,7 +404,7 @@ In other words: a *cost-aware abstraction function* is a *behavioral abstraction
 Let's see how this looks in practice.
 We can annotate the abstraction function itself with cost, according to the potential function \\( \Phi(\textit{inbox}, \textit{outbox}) = \mathsf{length}(\textit{inbox}) \\) from before:
 ```ocaml,hl_lines=3
-let abstraction : BatchedQueue.t -> ListQueue.t =
+let alpha : BatchedQueue.t -> ListQueue.t =
   fun (inbox, outbox) ->
   charge (List.length inbox);
   outbox @ List.rev inbox
@@ -419,30 +413,30 @@ let abstraction : BatchedQueue.t -> ListQueue.t =
 This abstraction function integrates cost and behavior considerations, both charging according to the potential function and converting a `BatchedQueue.t` representation to a `ListQueue.t` representation.
 The amortization conditions are exactly verified by the [abstraction function criteria](#abstraction-function).
 Let's briefly sketch the proofs for `empty` and `enqueue` as follows.
-First, `abstraction` preserves `empty`, including cost:
+First, `alpha` preserves `empty`, including cost:
 ```ocaml,hl_lines=3-4
-abstraction (BatchedQueue.empty ())
-= abstraction ([], [])
+alpha (BatchedQueue.empty ())
+= alpha ([], [])
 = charge 0; []
 = []
 = ListQueue.empty ()
 ```
-The proof is the same as [before](#abstraction-function), but with one extra step to remove the inconsequential `charge 0` from the definition of `abstraction`.
-Next, `abstraction` preserves `enqueue`:
+The proof is the same as [before](#abstraction-function), but with one extra step to remove the inconsequential `charge 0` from the definition of `alpha`.
+Next, `alpha` preserves `enqueue`:
 ```ocaml,hl_lines=3-5 7
-abstraction (BatchedQueue.enqueue x (inbox, outbox))
-= abstraction (x :: inbox, outbox)
+alpha (BatchedQueue.enqueue x (inbox, outbox))
+= alpha (x :: inbox, outbox)
 = charge (List.length (x :: inbox)); outbox @ List.rev (x :: inbox)
 = charge (1 + List.length inbox); outbox @ List.rev (x :: inbox)
 = charge 1; charge (List.length inbox); outbox @ List.rev (x :: inbox)
 = charge 1; charge (List.length inbox); outbox @ List.rev inbox @ [ x ]
 = charge 1; (charge (List.length inbox); outbox @ List.rev inbox) @ [ x ]
-= charge 1; abstraction (inbox, outbox) @ [ x ]
-= ListQueue.enqueue x (abstraction (inbox, outbox))
+= charge 1; alpha (inbox, outbox) @ [ x ]
+= ListQueue.enqueue x (alpha (inbox, outbox))
 ```
 The highlighted lines show differences compared to the proofs sans cost.
 In addition to converting the efficient batched representation to the specification-level list representation, the abstraction function releases the "potential" associated with the `inbox` list.
-Since `BatchedQueue.enqueue` prepends `x` to `inbox`, the `abstraction` function charges `1 + List.length inbox`, where the `1` corresponds to the `1` cost charged by the `ListQueue.enqueue` cost specification and the remaining `List.length inbox` is preserved.
+Since `BatchedQueue.enqueue` prepends `x` to `inbox`, the `alpha` function charges `1 + List.length inbox`, where the `1` corresponds to the `1` cost charged by the `ListQueue.enqueue` cost specification and the remaining `List.length inbox` is preserved.
 
 Viewing amortized analysis as a cost-aware abstraction function proof, the reasoning principles afforded by abstraction functions are upgraded to the cost-aware setting accordingly.
 For example, as before, we can switch from using `BatchedQueue` to using `ListQueue` at any point in a sequence of operations and the results will cohere, including the cost (*i.e.*, the number of `$` symbols printed):
@@ -451,13 +445,13 @@ let demo =
   BQ.empty ()            (* $0 *)
   |> BQ.enqueue 1        (* $0 *)
   (* ⬆️ batched queue *)
-  |> abstraction         (* $1 *)
+  |> alpha         (* $1 *)
   (* ⬇️ list queue *)
   |> LQ.enqueue 2        (* $1 *)
   |> LQ.dequeue          (* $0 *)
 ;;
 ```
-Regardless of the placement of the switch using `abstraction`, the total cost of this sequence of operations will be `$2`.
+Regardless of the placement of the switch using `alpha`, the total cost of this sequence of operations will be `$2`.
 We can again visualize this process as the composition of commutative squares:
 <!-- https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ== -->
 <iframe class="quiver-embed" src="https://q.uiver.app/#q=WzAsMTAsWzQsMCwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtCUS50fSJdLFsyLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzQsMSwiXFx0ZXh0dHR7aW50fSBcXGFzdCBcXHRleHR0dHtMUS50fSJdLFsyLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMCwiXFx0ZXh0dHR7dW5pdH0iXSxbMCwxLCJcXHRleHR0dHt1bml0fSJdLFsxLDAsIlxcdGV4dHR0e0JRLnR9Il0sWzEsMSwiXFx0ZXh0dHR7TFEudH0iXSxbMywwLCJcXHRleHR0dHtCUS50fSJdLFszLDEsIlxcdGV4dHR0e0xRLnR9Il0sWzAsMiwiXFxhbHBoYSciXSxbMSwzLCJcXGFscGhhIiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNCw1LCIiLDAseyJzdHlsZSI6eyJoZWFkIjp7Im5hbWUiOiJub25lIn19fV0sWzQsNiwiXFx0ZXh0dHR7ZW1wdHl9IiwwLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbNSw3LCJcXHRleHR0dHtlbXB0eX0iLDJdLFs3LDMsIlxcdGV4dHR0e2VucXVldWV9fjEiLDJdLFs2LDEsIlxcdGV4dHR0e2VucXVldWV9fjEiLDAseyJjb2xvdXIiOlswLDYwLDYwXX0sWzAsNjAsNjAsMV1dLFs2LDcsIlxcYWxwaGEiXSxbOCwwLCJcXHRleHR0dHtkZXF1ZXVlfSJdLFs5LDIsIlxcdGV4dHR0e2RlcXVldWV9IiwyLHsiY29sb3VyIjpbMCw2MCw2MF19LFswLDYwLDYwLDFdXSxbMSw4LCJcXHRleHR0dHtlbnF1ZXVlfX4yIl0sWzMsOSwiXFx0ZXh0dHR7ZW5xdWV1ZX1+MiIsMix7ImNvbG91ciI6WzAsNjAsNjBdfSxbMCw2MCw2MCwxXV0sWzgsOSwiXFxhbHBoYSJdXQ==&embed" width="750" height="250" style="border-radius: 8px; border: none;"></iframe>
