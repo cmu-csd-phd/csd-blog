@@ -228,7 +228,7 @@ let demo =
   BQ.empty ()            (* [], []  *)
   |> BQ.enqueue 1        (* [1], [] *)
   (* ⬆️ batched queue *)
-  |> alpha         (* [1]     *)
+  |> alpha               (* [1]     *)
   (* ⬇️ list queue *)
   |> LQ.enqueue 2        (* [1; 2]  *)
   |> LQ.dequeue          (* 1, [2]  *)
@@ -385,7 +385,7 @@ end
 ```
 
 In light of these cost-aware modifications to `BatchedQueue` and `ListQueue`, the existing function `alpha` no longer meets the criteria for being a valid abstraction function.
-The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations mediated by the `alpha` conversion; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
+The criteria for an abstraction function require equalities between `BatchedQueue` and `ListQueue` operations, mediated by `alpha`; however, such equalities ought to now consider cost, but the expressions on either side of the equations do not always have the same costs.
 For example, [we asked](#abstraction-function) that \\[ \alpha(\texttt{BQ.enqueue}\ x~q) = \texttt{LQ.enqueue}\ x~(\alpha~q), \\] again writing \\( \alpha \\) for the abstraction function, `alpha`.
 While both sides still return the same results, we now have that the left side charges for zero cost (in `BQ.enqueue`), even though the right side claims to charge for one unit of cost (in `LQ.enqueue`).
 To rectify this issue without changing the enqueue implementations, there's only one possible solution: make the `alpha` function itself charge some cost!
@@ -396,7 +396,8 @@ summing the costs from the components of each side of the abstraction function e
 Let's make this a bit more precise.
 If the abstraction function were to incur some amount of cost when applied to a given \\( q \\), which we write \\( \C{\alpha~q} \\), the following condition would have to hold for the enqueue operation:
 \\[ \C{\texttt{BQ.enqueue}\ x~q} + \C{\alpha(\texttt{BQ.enqueue}\ x~q)} = \C{\alpha~q} + \C{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\]
-Since we included the amortized cost specification in `ListQueue`, we have \\( \C{\texttt{LQ.enqueue}\ x~(\alpha~q)} \coloneqq \AC{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\).
+Since we included the amortized cost specification in `ListQueue`, we have \\[ \C{\texttt{LQ.enqueue}\ x~(\alpha~q)} \coloneqq \AC{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\] by definition.
+
 Now, if we compute the cost of the abstraction function as the potential function, \\( \C{\alpha~q} \coloneqq \Phi(q) \\), **the cost aspect of the abstraction function condition is precisely the amortization condition**!
 \\[ \C{\texttt{BQ.enqueue}\ x~q} + \Phi(\texttt{BQ.enqueue}\ x~q) = \Phi(q) + \AC{\texttt{LQ.enqueue}\ x~(\alpha~q)} \\]
 In other words: a *cost-aware abstraction function* is a *behavioral abstraction function* equipped with cost according to an amortized analysis *potential function*.
@@ -414,7 +415,7 @@ This abstraction function integrates cost and behavior considerations, both char
 The amortization conditions are exactly verified by the [abstraction function criteria](#abstraction-function).
 Let's briefly sketch the proofs for `empty` and `enqueue` as follows.
 First, `alpha` preserves `empty`, including cost:
-```ocaml,hl_lines=3-4
+```ocaml,hl_lines=3
 alpha (BatchedQueue.empty ())
 = alpha ([], [])
 = charge 0; []
@@ -445,7 +446,7 @@ let demo =
   BQ.empty ()            (* $0 *)
   |> BQ.enqueue 1        (* $0 *)
   (* ⬆️ batched queue *)
-  |> alpha         (* $1 *)
+  |> alpha               (* $1 *)
   (* ⬇️ list queue *)
   |> LQ.enqueue 2        (* $1 *)
   |> LQ.dequeue          (* $0 *)
