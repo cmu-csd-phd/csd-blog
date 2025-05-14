@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "Amortized Analysis as a Cost-Aware Abstraction Function"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-04-14
+date = 2025-05-14
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
