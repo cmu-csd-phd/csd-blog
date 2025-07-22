@@ -165,5 +165,16 @@ to predict task duration as a function of TPCs assigned.
 
 We implemented LithOS in about 5000 lines of code and evaluated it along two
 metrics for a set of neural network models.
+We compare LithOS to time slicing, MPS, and MIG, as well as three other
+state-of-the-art systems, REEF, TGS, and Orion.
+
+We stack three applications together, a high-priority service (HP A), a
+closed-loop high-priority job (HP B), and a best-effort job (BE).
+
+GPU sharing should both maximize GPU utilization and fulfill application SLOs.
+System throughput is a good proxy metric for GPU utilization. Application SLOs
+are 
+
+## 
 
 # Conclusion
