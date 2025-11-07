@@ -23,16 +23,16 @@ committee = [
 
 ## TL;DR
 
-LithOS gives near-MPS throughput with MIG-like isolation and sub-millisecond agility by reclaiming GPU scheduling in software. It interposes on CUDA (virtual streams), predicts runtimes online, slices kernels (~500 μs) to bound preemption, and applies per-launch TPC masks for fine-grained spatial stacking---no application changes required.
+LithOS reclaims GPU scheduling in software. It interposes on CUDA (virtual streams), predicts runtimes online, slices kernels (~500 μs) to bound preemption, and applies per-launch TPC masks for fine-grained spatial stacking to keep devices busy and protect tail latencies—no app changes.
 
 # Introduction
 
-GPUs are expensive---and too often idle. Inference bursts and copy-heavy phases in training leave gaps in time, while small or bursty jobs underfill big devices in space. For instance, an LLM inference service with a p95 target under 30 ms may need to share a GPU with a background training job: today, you either strand capacity (MIG/time slicing) or risk tails exploding (MPS). LithOS aims to give you all three: near-MPS utilization with MIG-like isolation and sub-millisecond agility, without changing your CUDA code.
+GPUs are expensive---and too often idle. Inference bursts and copy-heavy phases in training leave gaps in time, while small or bursty jobs underfill big devices in space. For instance, an LLM inference service with a p95 target under 30 ms may need to share a GPU with a background training job: today, you either strand capacity (MIG/time slicing) or risk tails exploding (MPS). LithOS aims to combine near-MPS utilization with MIG-like isolation, without changing your CUDA code.
 
-When resources become scarce, we share them. The CPU world learned this decades
-ago with timesharing, later evolving to allocate both time and cores. The same
-trajectory is now playing out for GPUs: a growing ecosystem of mechanisms
-attempts to share accelerators either temporally, spatially, or both.
+Two tensions drive this space:
+- Latency vs. throughput within a tenant (small slices preempt faster, big slices run more efficiently).
+- Utilization vs. isolation across tenants (packing keeps devices busy, partitioning prevents interference).
+LithOS addresses both with just-in-time slicing in time and fine-grained masking in space.
 
 This post focuses on NVIDIA hardware and terminology. The default sharing
 mechanism is time slicing (TS): the device switches application contexts roughly every few
@@ -42,40 +42,11 @@ it neither supports spatial stacking nor accounts for diverse requirements.
 Prior work (e.g., [TGS](https://www.usenix.org/conference/osdi22/presentation/han), [REEF](https://www.usenix.org/conference/nsdi23/presentation/wu)) adds priority to temper "fairness" with service
 goals, but cannot overcome the limits of coarse temporal multiplexing alone.
 
-Spatial partitioning helps in a world of ever-larger GPUs. With [Multi-Instance
-GPU (MIG)](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/), users can carve the device into a few instances (at the granularity of Graphics Processing Clusters, or GPCs) and hand those to
-different apps. MIG provides isolation, but its granularity is coarse and
-reconfiguration takes on the order of a second---too slow for interactive or
-rapidly shifting workloads.
+Spatial partitioning helps on ever-larger GPUs. With [Multi-Instance GPU (MIG)](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/), users carve a device into a few instances (at GPC granularity) and hand those to apps. MIG provides isolation, but the units are coarse and reconfiguration takes ~1s---too slow for interactive or shifting workloads.
 
-On the other end, NVIDIA’s [Multi-Process Service (MPS)](https://docs.nvidia.com/deploy/mps/index.html) maximizes utilization by
-collapsing tenants into a single hardware context. This keeps the device busy
-but offers little policy: without additional control, the application that
-launches more work tends to win. Systems like [Orion](https://doi.org/10.1145/3627703.3629578) and MPS client priority
-mitigate this by buffering and prioritizing launches, yet they still inherit
-MPS's lack of fine-grained time/space control.
+At the other end, NVIDIA’s [Multi-Process Service (MPS)](https://docs.nvidia.com/deploy/mps/index.html) maximizes utilization by collapsing tenants into a single hardware context. This keeps the device busy but offers little policy: the app that launches more work tends to win. Systems like [Orion](https://doi.org/10.1145/3627703.3629578) and MPS client priority mitigate this by buffering and prioritizing launches, yet inherit MPS's lack of fine-grained time/space control.
 
-What's missing is a GPU "operating system" that combines the utilization of
-MPS, the agility of time slicing, and the isolation of spatial
-partitioning---ideally at a finer granularity than MIG's GPCs and with
-sub-millisecond responsiveness.
-
-Put differently, modern ML serving and training clusters grapple with a
-three-way tension:
-
-- Utilization: keep expensive accelerators busy even when individual jobs are
-  bursty or small.
-- Isolation: protect critical services from noisy neighbors and bound tail
-  latency.
-- Agility: reallocate capacity quickly as load shifts, without heavy
-  reconfiguration or restarts.
-
-Existing mechanisms hit only two corners at best. Time slicing (TS) gives isolation
-and agility but bleeds utilization with
-no spatial stacking. MIG offers hard isolation, but its coarse granularity and
-second-scale reconfiguration make it ill-suited to dynamic workloads. MPS
-wrings out utilization, but without policy it devolves into "whoever launches
-more wins," which is unacceptable for SLO (service-level objective)-driven services.
+What's missing is a GPU "operating system" that unifies software control over time and space so the device stays busy without sacrificing predictability.
 
 The core barriers are: (1) you can’t preempt arbitrary GPU kernels at fine granularity, and (2) MIG’s coarse spatial units make dynamic partitioning impractical. LithOS addresses both in software.
 
@@ -89,124 +60,42 @@ requiring application changes.
 
 At a glance, LithOS contributes:
 
-- Virtual streams: reclaim launch control from the device scheduler while preserving application concurrency (agility + isolation).
-- Online latency micro-models: predict per-task runtime and scale predictions with assigned compute share (utilization + agility).
-- Transparent kernel slicing: bound preemption latency to hundreds of microseconds with negligible overhead on common kernels (isolation + agility).
-- Per-launch TPC masking: enable spatial stacking at finer granularity than MIG for simultaneous, isolated execution (utilization + isolation).
-- SLO-friendly scheduling policies: combine priority, fairness, and tail-latency control for latency-critical (LC) services while maintaining high device occupancy (isolation + utilization).
+- Virtual streams: reclaim launch control from the device scheduler while preserving application concurrency.
+- Online latency micro-models: predict per-task runtime and scale predictions with assigned compute share.
+- Transparent kernel slicing: bound preemption latency to hundreds of microseconds with negligible overhead on common kernels.
+- Per-launch TPC masking: enable fine-grained spatial stacking for simultaneous, isolated execution.
+- SLO-friendly scheduling: priority, fairness, and tail-aware admission at slice granularity.
 
 The rest of this post dives into how these pieces fit together and what they
 buy you in practice.
 
 # Design
 
-![LithOS design: virtual streams, online runtime prediction, kernel slicing, and per-launch TPC masking work together to balance utilization, isolation, and agility.](design.pdf)
+![LithOS design: virtual streams, online runtime prediction, kernel slicing, and per-launch TPC masking.](design.pdf)
 
 _Figure: LithOS interposes on CUDA submissions, predicts runtimes online, slices kernels, and applies per-launch TPC masks to realize policy on hardware._
 
  
 
-The LithOS architecture is similar to some prior works, interposing the CUDA
-API, buffering GPU tasks, and performing scheduling normally left up to the
-device. However, LithOS integrates a few components to successfully provide
-the high utilization of MPS with the effective isolation of time slicing and
-MIG.
-
-## Architecture at a glance
-
-LithOS comprises a lightweight user-space library that applications preload and
-a daemon that arbitrates the GPU.
-
-- The interposer library wraps CUDA APIs (streams, events, _memcpy_()s, kernel
-  launches). Applications keep using their existing code; LithOS captures the
-  intent.
-- A per-application shim translates these calls into a neutral IR: a DAG of
-  operations (copies, sets, kernels) with dependencies and resource hints.
-- A central daemon maintains a queue per application (a "virtual stream" set),
-  learns task durations, and schedules slices onto the physical GPU streams
-  according to cluster policy.
-- An enforcement layer applies per-launch constraints (slice sizes, TPC masks,
-  outstanding work caps) and meters memory-bandwidth--sensitive operations.
-
-This separation mirrors classic OS design: apps interact with a narrow API; the
-kernel decides when and where work runs; enforcement ensures decisions manifest
-on the hardware.
+LithOS interposes the CUDA API, buffers GPU tasks, and performs scheduling normally left to the device. The key difference is integrating four pieces—virtual streams, a tiny latency model, slicing, and TPC masking—to get MPS-like utilization with MIG-like isolation.
 
 ## Reclaiming GPU Scheduling with Virtual Streams
 
-GPUs are typically programmed by launching memory copies and many kernels,
-filling up GPU pipelines and then waiting for these tasks to complete. While
-very effective for single applications attempting to use the GPU's extensive
-capacity, this programming model isn't conducive to scenarios where multiple
-applications share GPU resources. GPU hardware schedulers are
-throughput-oriented, ignoring fairness concerns.
+CUDA apps flood the device with copies and kernels, which is great for a single tenant but problematic when many share a GPU: the hardware scheduler is throughput-first. LithOS intercepts submissions into software queues (“virtual streams”), maintains only a bounded amount of outstanding work, and has a daemon issue operations while respecting dependencies.
 
-LithOS must reclaim from the GPU the onus of scheduling tasks, without
-uncovering the latencies associated with GPU computation. LithOS does this by
-means of software command queues. Specifically, LithOS intercepts application
-task submission and enqueues the tasks in its own queues. A LithOS daemon
-thread dequeues operations and submits them to the GPU, respecting control flow
-dependencies and limiting the number of outstanding tasks.
-
-By limiting the number of outstanding tasks, LithOS reserves the option of
-throttling one application to allow another to make faster progress. In this
-way, LithOS can ensure application SLOs are met.
-
-Two practical questions arise when reclaiming control from the hardware
-scheduler:
-
-1) How do we keep the GPU fed? LithOS never drains the device; it maintains a
-   small cushion of ready work per physical stream (e.g., a few slices and
-   _memcpy_()s ahead) so kernels can back-to-back issue. This cushion is tuned
-   dynamically from the latency model to balance utilization and preemption
-   latency.
-2) How do we honor application concurrency? Developers often rely on CUDA
-   streams to expose graph parallelism. LithOS preserves intra-app ordering and
-   overlap by tracking dependencies (events, stream order, implicit barriers)
-   and mapping the app's many virtual streams onto a controlled number of
-   physical streams, similar to multiplexing OS threads onto cores.
-
-Virtual streams also give us a place to attach policy. For example, a
-high-priority service can receive a larger outstanding-work budget and
-immediate admission for latency-critical slices, while best-effort jobs drain
-opportunistically.
+Keeping a small cushion of ready work per physical stream keeps the GPU fed; bounding the cushion lets LithOS throttle or admit slices to meet SLOs. LithOS preserves intra-app concurrency by tracking events and stream order, mapping many virtual streams onto a few physical streams—like multiplexing threads onto cores. Policy hooks live on these queues: high-priority services get larger budgets and immediate admission for latency-critical slices; best-effort work drains opportunistically.
 
 ## Cheaply Estimating Task Durations
 
-To schedule GPU work, LithOS limits the amount outstanding. Too little, and GPU
-communication overheads take over, greatly reducing application performance.
-Too much, and LithOS is unable to reclaim resources in response to shift
-application loads. A challenge is that it is unknown how long a task may take.
-While tasks like memory copies or memory sets have somewhat deterministic
-latencies, it is impossible to predict how long arbitrary kernel code will
-take.
+To keep the device busy yet preempt quickly, LithOS must know “how long will this take if I give it k TPCs now?” ML workloads are repetitive (training loops, repeated inference graphs), so we learn from recent launches.
 
-However, GPU workloads are often regular. Neural network training is a loop
-where similar GPU tasks are launched in each iteration. Inference service
-launches the same model graphs repeatedly in response to queries. LithOS'
-latency model uses this regularity to predict how long a previously executed
-task will take. The model retains a recent window of past task durations.
-
-Concretely, LithOS maintains per-(kernel, shape) micro-models keyed by salient
-launch parameters (grid, block, problem size). We use medians for a robust
-aggregate to smooth short-term jitter. To extrapolate across spatial
-allocations, we embed a simple transformed-Amdahl model:
+LithOS maintains per-(kernel, shape) micro-models keyed by salient launch parameters and aggregates recent durations (robust medians). To predict across spatial shares, we use a tiny transformed-Amdahl model:
 
 $$
 t(p) \approx t_\text{serial} + t_\text{parallel} / f(p)
 $$
 
-Here, \\(p\\) is the assigned TPC share (count of TPCs), and \\(f(p)\\) is a monotonically increasing, sublinear function that captures diminishing returns at lower occupancy. A tiny online regression updates
-\\(t_\text{serial}\\) and \\(t_\text{parallel}\\) from observed slices. The
-scheduler then asks: "If I give this app \\(k\\) TPCs for the next 2ms, how
-much of its queue clears?" Those forecasts drive both admission and the size of
-the outstanding-work cushion.
-
-This model is deliberately humble. It avoids offline profiling, respects drift
-(weights recent data), and falls back to conservative caps for
-never-before-seen kernels until measurements arrive. In practice, the
-regularity of ML loops means the model converges within a handful of
-iterations.
+Here, p is the assigned TPC count and f(p) captures sublinear scaling. A tiny online regression updates t_serial and t_parallel from observed slices. The scheduler asks: “If I give this app k TPCs for the next 2 ms, how much of its queue clears?” Those forecasts drive admission and the outstanding-work cushion. No offline profiling; we weight recent data and fall back to conservative caps for unseen kernels.
 
 ## Slicing Grids for Fine-grained Scheduling in Time
 
@@ -214,81 +103,26 @@ iterations.
 
 _Figure: LithOS slices kernels into ~500 μs chunks to bound preemption latency while keeping the GPU fed._
 
-In order to schedule application tasks, LithOS must be able to bound the time
-a task takes. If a task were allowed to run for indefinite time, LithOS would
-be unable to reclaim its resources for other tasks. In CPU land, this is done
-via timer interrupts and context switching. NVIDIA's time slicing does this;
-however, third-party software doesn't have access to the SM interrupt handlers
-that enable such context switching.
+To bound preemption latency, LithOS slices kernels. Kernels launch as grids of blocks; we transparently split a grid into multiple launches, each covering a subset of blocks. The latency model picks a ~500 μs quantum: large enough to amortize <10 μs launch overhead, small enough to preempt LC work quickly. Many kernels already fit and need no slicing.
 
-LithOS takes a different approach: kernel slicing. Kernels are launched as
-grids of many thread blocks. Generally, the GPU programming model allows for
-the thread blocks to execute in any order, simultaneously or not. LithOS
-interposes application kernel launches, and breaks them up into multiple
-launches, each with a subset of the thread blocks in the original launch.
-
-Kernel launches are not free, and LithOS slicing, while entirely transparent to
-GPU programmers, has additional overhead. How does LithOS manage the trade-off
-between slice size and agile scheduling?
-
-The applications which LithOS targets---inference service and neural network
-training---typically have SLOs no more strict than a tens of milliseconds. To
-fill these needs, LithOS must be able to reschedule resources within a similar
-timeframe. Using the task latency model, LithOS slices grids into 500 μs pieces.
-Many kernels already complete within this timeframe and do not require slicing.
-This quantum amortizes the launch overhead, which is under 10 μs.
-
-There are important edge cases:
-
-- Persistent/cooperative kernels that rely on all blocks resident at once can
-  result in hangs when sliced. For applications consisting of such kernels,
-  slicing should be disabled.
-- Tiny kernels that already complete within the quantum are left intact to
-  avoid death-by-a-thousand-launches.
-
-Because slicing happens at submission time, apps require no code changes.
-LithOS rewrites a launch of B blocks into a sequence of launches with B1, B2,
-... blocks whose union is the original set, interleaving slices from other
-applications according to policy.
+Edge cases: (1) persistent/cooperative kernels that need all blocks resident shouldn’t be sliced; (2) tiny kernels under the quantum are left intact. Because slicing happens at submission time, apps require no code changes.
 
 ## Masking TPCs for Fine-grained Scheduling in Space
 
-A major feature of LithOS is the ability to stack applications _spatially_,
-allowing them to execute simultaneously on disjoint sets of SMs. While MIG
-allocates GPCs, it is possible to allocate on the smaller granularity of TPCs.
-LithOS does this, masking off TPCs for each kernel launch. This enables
-efficient, isolated use of GPU compute.
+LithOS stacks applications spatially by masking TPCs per launch, enabling simultaneous execution on disjoint SM subsets. We treat TPCs as the maskable unit; on modern NVIDIA GPUs, a TPC maps to a set of SM resources that can be selectively enabled.
 
-We treat TPCs as the maskable spatial unit; on modern NVIDIA GPUs, a TPC maps to a set of SM resources that can be selectively enabled per launch.
-
-TPC masking interacts with the task latency model. Depending on higher-level
-LithOS policy, tasks may execute at different times with different TPC masks.
-The task latency model fits a linear regression for transformed Amdahl's Law
-to predict task duration as a function of TPCs assigned.
-
-Putting time and space together, LithOS can, for example, dedicate one third of
-the TPCs to a latency-critical service for the next millisecond, while letting
-a training job stream through slices on the remaining TPCs. A millisecond
-later, if the service's queue drains, its share shrinks automatically and the
-best-effort job expands to fill the slack---no MIG reconfiguration required.
+The latency model already predicts across TPC shares, so policy can reshape space on the fly: e.g., give 1/3 of TPCs to LC work for 1 ms while a training job streams on the rest; when the LC queue drains, the BE job expands—no MIG reconfig needed.
 
 ## Compatibility, safety, and deployment
 
-LithOS is designed to be a drop-in for most CUDA apps. A few caveats are worth
-noting:
-
-- Cooperative kernels and device-side launches are supported but may restrict
-  slicing opportunities.
-- Memory oversubscription is out of scope; LithOS does not swap device memory.
-  It can, however, meter allocation-heavy phases to reduce stalls.
-- Security/tenancy isolation is best-effort at the performance level; for hard
-  isolation guarantees, MIG remains complementary. LithOS can run within a MIG
-  instance to add agility inside a static partition.
+LithOS is a drop-in for most CUDA apps. Caveats:
+- Cooperative/persistent kernels and device-side launches may restrict slicing.
+- No device-memory oversubscription; we can meter allocation-heavy phases.
+- For hard security isolation, pair LithOS with fixed MIG partitions; LithOS then adds dynamic share reshaping inside the partition.
 
 # Results
 
-We implemented LithOS in about 5000 lines of code and evaluated it along two
-metrics for a set of neural network models.
+We implemented LithOS in about 5000 lines of code and evaluated it along two metrics for a set of neural network models.
 We compare LithOS to time slicing, MPS, and MIG, as well as three other
 state-of-the-art systems, [REEF](https://www.usenix.org/conference/nsdi23/presentation/wu), [TGS](https://www.usenix.org/conference/osdi22/presentation/han), and [Orion](https://doi.org/10.1145/3627703.3629578).
 
@@ -302,13 +136,7 @@ LC services and completion time/throughput for HP/BE jobs. We report both ends
 of this trade-off and show that LithOS improves the Pareto frontier relative to
 prior mechanisms.
 
-Our evaluation uses a suite of representative neural-network workloads spanning
-compute-bound and memory-bound kernels, with both steady-state training loops
-and bursty inference traffic. We evaluate on modern NVIDIA datacenter GPUs with
-recent drivers and contrast LithOS against: (1) time slicing (TS), (2) MPS, (3)
-MIG configured to share the device across tenants, and (4) three research
-systems---[REEF](https://www.usenix.org/conference/nsdi23/presentation/wu), [TGS](https://www.usenix.org/conference/osdi22/presentation/han), and [Orion](https://doi.org/10.1145/3627703.3629578)---configured per their recommended settings. All
-systems run the same binaries.
+Our evaluation uses representative neural-network workloads (compute- and memory-bound), with steady-state training and bursty inference. We compare on modern NVIDIA datacenter GPUs against: (1) time slicing (TS), (2) MPS, (3) MIG partitions, and (4) [REEF](https://www.usenix.org/conference/nsdi23/presentation/wu), [TGS](https://www.usenix.org/conference/osdi22/presentation/han), and [Orion](https://doi.org/10.1145/3627703.3629578), all using the same binaries.
 
 ## Pushing the Pareto Frontier
 
@@ -331,17 +159,14 @@ isolated baseline. As load ebbs and flows, the scheduler continuously reshapes
 time/space allocations, avoiding the reconfiguration penalties that make MIG
 sluggish.
 
-## Correctly Allocating Performance
+## Allocating Performance
 
 ![LithOS services critical applications while allowing best-effort execution.](
   goodput.pdf)
 
 _Figure: LC meets SLOs while HP and BE utilize remaining TPCs; BE yields quickly during LC spikes and ramps back smoothly afterward._
 
-How does LithOS push the latency/throughput Pareto frontier? Similar to the
-partitioning systems MIG and limits, it successfully isolates HP A from the
-noisy neighbors that plague MPS-like sharing. But unlike static partitions, it
-doesn’t strand capacity. In mixed LC/HP/BE experiments, LithOS maintains LC
+How does LithOS push the latency/throughput Pareto frontier? Similar to partitioning systems like MIG and TS, it isolates HP A from the noisy neighbors that plague MPS-like sharing. But unlike static partitions, it doesn’t strand capacity. In mixed LC/HP/BE experiments, LithOS maintains LC
 SLOs and assigns the remaining TPCs to HP and BE jobs. When LC traffic spikes,
 BE yields quickly (sub-millisecond) and HP absorbs a controlled slowdown; when
 traffic subsides, BE ramps back up without handoffs or instance churn.
@@ -356,75 +181,35 @@ won't jeopardize SLOs.
 
 _Figure: Tail latencies shrink due to bounded preemption latency and spatial masking during LC bursts._
 
-Without partitioning, sharing systems are unable to limit tail latencies. These
-diverge on MPS, priority, [REEF](https://www.usenix.org/conference/nsdi23/presentation/wu), and [Orion](https://doi.org/10.1145/3627703.3629578). Temporal partitioning systems are
-able to limit this to some extent and perform better. LithOS effectively limits
-latencies close to the isolated execution of MPS limits and is the only system
-that meets all SLOs. Specifically, LithOS reduces tail latencies 13× compared
-to MPS and 12× compared to [Orion](https://doi.org/10.1145/3627703.3629578).
+Without partitioning, sharing systems are unable to limit tail latencies. These diverge on MPS, priority, [REEF](https://www.usenix.org/conference/nsdi23/presentation/wu), and [Orion](https://doi.org/10.1145/3627703.3629578). Temporal partitioning systems limit this to some extent. LithOS keeps latencies close to isolated execution and is the only system that meets all SLOs. Specifically, LithOS reduces tail latencies 13× vs. MPS and 12× vs. [Orion](https://doi.org/10.1145/3627703.3629578).
 
 Why do tails shrink? Two reasons:
-
-- Bounded preemption latency from slicing: LC work is never stuck behind a
-  multi-millisecond kernel.
-- Spatial masking during LC bursts: LC kernels run on a clean subset of TPCs,
-  reducing queueing and cache pollution from neighbors.
-
-These mechanisms act conservatively. If a kernel cannot be sliced safely, or a
-mask would cause correctness issues, LithOS falls back to temporal sharing
-while maintaining admission control.
+- Bounded preemption latency from slicing: LC work isn’t stuck behind multi-millisecond kernels.
+- Spatial masking during LC bursts: LC kernels run on a clean subset of TPCs, reducing queueing and cache pollution.
+If a kernel cannot be sliced safely or a mask is risky, LithOS falls back to temporal sharing while keeping admission control.
 
 ## Methodological notes
 
-We evaluate steady-state behavior (minutes) rather than transient
-micro-benchmarks. All curves are averaged over multiple runs with confidence
-bands; we pin CUDA driver and runtime versions across systems for fairness.
-Results focus on relative deltas---exact numbers vary across GPUs and driver
-releases---but the qualitative trends are robust: combining just-in-time
-scheduling with sub-millisecond slicing and fine-grained spatial partitioning
-consistently improves the latency--throughput trade-off.
+We evaluate steady state (minutes), average across runs with confidence bands, and pin CUDA versions for fairness. Results focus on relative deltas; trends are robust: just-in-time scheduling plus sub-millisecond slicing and fine-grained spatial partitioning improves the latency–throughput trade-off.
 
 # Limitations and what we don’t (yet) do
 
 Like any OS, LithOS makes trade-offs:
-
 - Cooperative/persistent kernels constrain slicing.
-- Collectives and multi-GPU jobs introduce global barriers outside a single
-  device's purview. LithOS preserves local ordering but cannot eliminate
-  cross-device tail amplification.
-- Device memory is not oversubscribed or paged; if you need more than fits, you
-  still need model parallelism or activation checkpointing at the framework
-  level.
-- Hard security isolation (e.g., side-channel resistance) is out of scope. For
-  tenants with strong isolation needs, run LithOS within fixed MIG partitions.
-- Not all CUDA features are equal: certain launch attributes and emerging
-  features may change how masks are applied. LithOS tracks stable APIs and
-  degrades gracefully when unsure.
+- Collectives and multi-GPU jobs can amplify tails across devices; LithOS can’t remove global barriers.
+- No device-memory paging; use model parallelism/checkpointing when memory-bound.
+- Hard security isolation is out of scope; use MIG for that, with LithOS inside.
+- Some CUDA features may affect masking; we track stable APIs and degrade gracefully.
 
-Despite these, the common path---DL training loops and inference
-graphs---benefits without code changes.
+Despite these, the common path—DL training loops and inference graphs—benefits without code changes.
 
 # Conclusion
 
-LithOS treats the GPU like what it has effectively become in modern ML
-services: a shared, precious compute fabric that deserves an operating system.
-By interposing at the CUDA boundary, learning how long tasks actually take,
-slicing kernels to bound preemption latency, and masking TPCs to stack tenants
-safely, LithOS delivers the utilization of MPS with the isolation of
-MIG---without the rigidity of static partitions.
+LithOS treats the GPU as a shared compute fabric that deserves an operating system. By interposing at the CUDA boundary, learning task times, slicing to bound preemption, and masking TPCs to stack tenants, LithOS delivers MPS-like utilization with MIG-like isolation—without rigid partitions.
 
-For practitioners, the upshot is simple:
+For practitioners:
+- Run LC inference next to background jobs and claw back utilization while keeping tails in check.
+- Consolidate many small/bursty jobs by stacking at TPC granularity; LithOS reshapes shares as load shifts.
+- Skip per-model profiling—LithOS learns online and adapts.
 
-- If you run latency-critical inference alongside background jobs, you can claw
-  back utilization while keeping tail latencies in check.
-- If you’re consolidating many small or bursty jobs onto fat GPUs, you can
-  spatially stack them at TPC granularity and let LithOS reshape allocations as
-  load shifts.
-- If your workloads evolve over time, you don’t need per-model
-  profiling---LithOS learns online and adapts.
-
-We think this is the right abstraction boundary for the next generation of ML
-infrastructure: a GPU OS that balances policy and performance, without changing
-how you write CUDA code. The detailed paper dives deeper into mechanisms and
-proofs; this post aimed to give you a feel for why these pieces matter and how
-they fit together in a real system.
+We believe this is the right abstraction boundary for the next generation of ML infrastructure: a GPU OS that balances policy with performance, without changing CUDA code.
