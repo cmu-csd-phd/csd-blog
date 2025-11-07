@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "LithOS: An Operating System for Efficient Machine Learning on GPUs"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-07-15
+date = 2025-10-23
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -35,10 +35,11 @@ ago with timesharing, later evolving to allocate both time and cores. The same
 trajectory is now playing out for GPUs: a growing ecosystem of mechanisms
 attempts to share accelerators either temporally, spatially, or both.
 
-This post focuses on NVIDIA hardware and terminology. The default mechanism is
+This post focuses on NVIDIA hardware and terminology. The default sharing
+mechanism is
 time slicing: the device switches application contexts roughly every few
-hundred microseconds, and if one app goes idle, the next runs immediately. Time
-slicing is simple and often fair---each context gets a proportional share---but
+hundred microseconds, and if one app idles, the next runs immediately. Time
+slicing is simple and fair---each context gets a proportional share---but
 it neither supports spatial stacking nor accounts for diverse requirements.
 Prior work (e.g., TGS, REEF) adds priority to temper "fairness" with service
 goals, but cannot overcome the limits of coarse temporal multiplexing alone.
@@ -71,8 +72,8 @@ three-way tension:
 - Agility: reallocate capacity quickly as load shifts, without heavy
   reconfiguration or restarts.
 
-Existing mechanisms hit only two corners at best. Time slicing gives agility
-and a veneer of fairness but bleeds utilization under interference and offers
+Existing mechanisms hit only two corners at best. Time slicing gives isolation
+and agility but bleeds utilization with
 no spatial stacking. MIG offers hard isolation, but its coarse granularity and
 second-scale reconfiguration make it ill-suited to dynamic workloads. MPS
 wrings out utilization, but without policy it devolves into "whoever launches
@@ -81,7 +82,7 @@ more wins," which is unacceptable for SLO-driven services.
 LithOS is our attempt to reconcile these goals with a principled, OS-like
 approach to GPUs. The key idea is to pull scheduling decisions back into
 software, where we can apply policy, while still feeding the device enough work
-to keep it saturated. LithOS interposes on application submissions, understands
+to keep it saturated. LithOS interposes application submissions, understands
 dependencies, estimates task durations online, and enforces fine-grained time
 and space partitioning at sub-millisecond and sub-GPC granularity---without
 requiring application changes.
@@ -96,7 +97,7 @@ At a glance, LithOS contributes:
   microseconds with negligible overhead on common kernels.
 - Per-launch TPC masking that enables spatial stacking at finer granularity
   than MIG, enabling simultaneous, isolated execution.
-- SLO-aware scheduling policies that combine priority, fairness, and
+- SLO-friendly scheduling policies that combine priority, fairness, and
   tail-latency control while maintaining high device occupancy.
 
 The rest of this post dives into how these pieces fit together and what they
