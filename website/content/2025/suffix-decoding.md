@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-05-03
+date = 2025-12-04
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
