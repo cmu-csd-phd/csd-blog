@@ -46,7 +46,7 @@ latency. LithOS is the first system effectively to mediate between these two
 concerns.
 
 ![LithOS design: virtual streams, online runtime prediction, kernel slicing,
-and per-launch TPC masking.](design.pdf)
+and per-launch TPC masking.](design.png)
 
 _Figure: LithOS interposes the CUDA Driver API, predicts runtimes online,
 slices kernels, and allocates processing resources to each kernel launch to
@@ -157,7 +157,7 @@ and fall back to conservative caps for new kernels.
 ## Slicing Grids for Fine-grained Scheduling in Time
 
 ![Slicing enables optimal scheduling by bounding preemption latency with short
-kernel slices.](slicing.pdf)
+kernel slices.](slicing.png)
 
 _Figure: LithOS slices kernels into ~500μs chunks to bound preemption latency
 while keeping the GPU busy._
@@ -212,7 +212,7 @@ memory-bound). We compare on modern NVIDIA datacenter GPUs.
 ## Pushing the Pareto Frontier
 
 ![LithOS provides the utilization of MPS with the isolation of MIG.](
-trade-off.pdf)
+trade-off.png)
 
 _Figure: LithOS keeps throughput near MPS while tracking SLO attainment close
 to isolated baselines by dynamically reshaping time/space allocations._
@@ -234,7 +234,7 @@ reconfiguration penalties that make MIG sluggish.
 ## Allocating Performance
 
 ![LithOS services high-priority applications while allowing some best-effort
-execution.](goodput.pdf)
+execution.](goodput.png)
 
 _Figure: Unlike all other systems, LithOS both perfectly services high-priority
 applications and allows significant best-effort execution._
@@ -252,7 +252,7 @@ SLOs.
 ## Successfully Limiting Tail Latencies
 
 ![LithOS successfully limits tail latencies by preventing interference.](
-latency.pdf)
+latency.png)
 
 _Figure: With LithOS, tail latencies shrink due to spatial partitioning and
 bounded preemption latency._
