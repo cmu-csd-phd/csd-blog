@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "LithOS: An Operating System for Efficient Machine Learning on GPUs"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2025-10-23
+date = 2025-12-09
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -20,14 +20,6 @@ committee = [
     {name = "Phil Gibbons", url = "https://www.cs.cmu.edu/~gibbons/"}
 ]
 +++
-
-## TL;DR
-
-LithOS lifts GPU scheduling into software. It interposes CUDA APIs, learns
-application characteristics online, slices kernels to limit temporal
-interference, and applies per-launch TPC masks for fine-grained spatial
-sharing to keep devices busy and protect tail latencies---all without any app
-changes.
 
 # Introduction
 
@@ -193,14 +185,19 @@ expands---no MIG reconfig needed.
 # Results
 
 We implemented LithOS in about 5000 lines of code and evaluated it along two
-metrics for a set of neural network models. We compare LithOS to time slicing,
-MPS, and MIG, as well as three other state-of-the-art systems, [REEF](
-https://www.usenix.org/conference/nsdi23/presentation/wu), [TGS](
-https://www.usenix.org/conference/osdi22/presentation/han), and [Orion](
-https://doi.org/10.1145/3627703.3629578).
+metrics for a set of neural network models. We compare LithOS to both
+existing NVIDIA sharing systems (time slicing, MPS, and MIG) and
+state-of-the-art research systems (REEF, TGS, and Orion). To compare with MPS,
+we add two configurations to the basic MPS setup, client _priority_ and active
+thread percentage _limits_.
 
 We stack three applications together, a high-priority service (HP A), a
-closed-loop high-priority job (HP B), and a best-effort job (BE).
+closed-loop high-priority job (HP B), and a best-effort job (BE). For systems
+which support partitioning (MIG, limits, and LithOS), we allocate 75% to HP A
+and 25% to HP B. MIG partitioning is inflexible, so we make due with a 4/7 and
+3/7 partitions. For systems which support priority, (priority, REEF, TGS,
+Orion, and LithOS), we reduce the priority of the BE application. On LithOS,
+this just means zeroing its TPC quota, so that it can only steal.
 
 GPU sharing should both maximize GPU utilization and fulfill application SLOs.
 System throughput is a good proxy metric for GPU utilization. Application SLOs
@@ -210,11 +207,7 @@ trade-off and show that LithOS improves the Pareto frontier relative to prior
 mechanisms.
 
 Our evaluation uses representative neural-network workloads (compute- and
-memory-bound). We compare on modern NVIDIA datacenter GPUs against: (1) time
-slicing (TS), (2) MPS, (3) MIG partitions, and (4) [REEF](
-https://www.usenix.org/conference/nsdi23/presentation/wu), [TGS](
-https://www.usenix.org/conference/osdi22/presentation/han), and [Orion](
-https://doi.org/10.1145/3627703.3629578), all using the same binaries.
+memory-bound). We compare on modern NVIDIA datacenter GPUs.
 
 ## Pushing the Pareto Frontier
 
@@ -265,13 +258,10 @@ _Figure: With LithOS, tail latencies shrink due to spatial partitioning and
 bounded preemption latency._
 
 Without partitioning, sharing systems are unable to limit tail latencies. These
-diverge on MPS, priority, [REEF](
-https://www.usenix.org/conference/nsdi23/presentation/wu), and [Orion](
-https://doi.org/10.1145/3627703.3629578). Temporal partitioning systems limit
+diverge on MPS, priority, REEF, and Orion. Temporal partitioning systems limit
 this to some extent. LithOS keeps latencies close to isolated execution and is
 the only system that meets all SLOs. Specifically, LithOS reduces tail
-latencies 13× vs. MPS and 12× vs. [Orion](
-https://doi.org/10.1145/3627703.3629578).
+latencies 13× vs. MPS and 12× vs. Orion.
 
 # Limitations and what we don't (yet) do
 
