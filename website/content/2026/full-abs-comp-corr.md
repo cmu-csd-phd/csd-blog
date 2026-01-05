@@ -9,7 +9,9 @@ tags = ["compilers", "full-abstraction", "correctness", "logical-relations", "co
 [extra]
 author = {name = "Matias Scharager", url = "https://pi314mm.com/" }
 committee = [
-    
+    {name = "Robert Harper", url = "https://www.cs.cmu.edu/~rwh/"},
+    {name = "Jan Hoffmann", url = "https://www.cs.cmu.edu/~janh/"},
+    {name = "Long Pham", url = "https://www.cs.cmu.edu/~longp/"}
 ]
 +++
 
