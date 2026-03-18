@@ -297,4 +297,4 @@ Similar to the point attacks, varying the query distribution and, in this case, 
 
 Although Polysys works well for a small number of constraints,  its scalability is limited due to the number of variables and CNF constraints required to represent the observed leakage. Future work can look at more efficient ways in compiling the polynomial constraints to CNF as well as looking to generalize Polysys further to capture more complicated leakage patterns. 
 
-While we were not able to discuss of of our techniques and results here, we refer the reader to our USENIX paper [here](https://eprint.iacr.org/2025/1530) to see a more complete view of our contributions. 
+While we were not able to discuss all of our techniques and results here, we refer the reader to our USENIX paper [here](https://eprint.iacr.org/2025/1530) to see a more complete view of our contributions. 
