@@ -63,9 +63,10 @@ Here is what Sakiko can do:
 </figure>
 
 Now consider a version of Flappy Bird that consists of infinitely many _episodes_, each with multiple pipes. 
-There two types of episodes: hard (with narrow spaces) or easy (with wide spaces). 
-When the bird reaches the end of an episode, the game transitions to a random type of episodes with equal probabilities, and generates \\(1\\) unit of score.
-When the bird hits a pipe, the game restarts from a hard episode. 
+<span style="color:blue"> When the bird reaches the end of an episode, a unit of score is generated, and the game restarts from a new episodes; when the bird hits a pipe, the game also restarts from an episode but with no score.</span> 
+There two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces). <span style="color:blue"> When an episode starts, its type is randomly sampled according to the following rule:</span>
+- <span style="color:blue">If the bird reaches the end of the previous episode, the new episode's type is EASY or HARD with equal probabilities.</span>
+- <span style="color:blue">If the bird hits a pipe in the previous episode, the new episode's type is always HARD.</span>
 
 As illustrated in <a href='#fig:flappy-octopus'>Figure 3</a>, Sakiko's goal is to play \\(N\\) sessions of Flappy Bird simultaneously and maximize the the long-run average score per unit of time by choosing the right subset of sessions to focus on. 
 We call this problem the Flappy-Bird-Octopus problem. 
@@ -74,13 +75,13 @@ The rules of Flappy-Bird-Octopus problem are concretely summarized as follows:
 - In each of the \\(N\\) sessions and at each time step, the bird attempts to pass one pipe, and Sakiko needs to decide whether to focus on this session.
     - If Sakiko focuses on this session, the bird will pass the pipe with probability \\(1\\). 
     - If Sakiko does not focus on this session,
-        - If this session is easy, the bird will still pass the pipe with probability \\(1\\). 
-        - If this session is hard, the bird will still pass the pipe with probability \\(1-p\\) and hit the pipe with probability \\(p\\). 
+        - If this session is EASY, the bird will still pass the pipe with probability \\(1\\). 
+        - If this session is HARD, the bird will still pass the pipe with probability \\(1-p\\) and hit the pipe with probability \\(p\\). 
     - After passing a pipe,
         - the bird moves on to the next pipe within this episode, or
         - if this is the last pipe in this episode, the bird moves to the first pipe in a new episode of random type, and receives \\(1\\) unit of score. 
     - After hitting a pipe,
-        - the bird restarts from the first pipe in a hard episode with no score.
+        - the bird restarts from the first pipe in a HARD episode with no score.
 
 
 <figure id="fig:flappy-octopus" style="text-align: center;">
@@ -91,7 +92,7 @@ The rules of Flappy-Bird-Octopus problem are concretely summarized as follows:
 
 
 
-Naively, Sakiko could certainly focus on a fixed \\(\alpha N\\) sessions, but since not all episodes are hard, a smarter strategy is to dynamically decide which session to focus on, based on the session's current episode type and the progress within the episode. 
+Naively, Sakiko could certainly focus on a fixed \\(\alpha N\\) sessions, but since not all episodes are HARD, a smarter strategy is to dynamically decide which session to focus on, based on the session's current episode type and the progress within the episode. 
 
 
 # Model: Restless Bandits {#model}
@@ -101,7 +102,7 @@ which has a _state_ (the episode type and pipe index) that changes over time.
 The decision maker takes an _action_ (to focus or not focus) every time step, which affects the _state transition probabilities_ and the _reward_ (score). The goal is to take a proper action based on the state, to maximize the average reward over the long run. 
 
 Formally, an MDP is defined by a tuple \\((\mathbb{S}, \mathbb{A}, P, r)\\):
-- **State space** \\(\mathbb{S}\\). For Flappy Bird, \\(\mathbb{S} = \\{1, 2, \ldots, k, k+1, \ldots, k+m\\}\\), where states \\(1\\) to \\(k\\) correspond to pipes in a hard episode and states \\(k+1\\) to \\(k+m\\) correspond to pipes in an easy episode.
+- **State space** \\(\mathbb{S}\\). For Flappy Bird, \\(\mathbb{S} = \\{1, 2, \ldots, k, k+1, \ldots, k+m\\}\\), where states \\(1\\) to \\(k\\) correspond to pipes in a HARD episode and states \\(k+1\\) to \\(k+m\\) correspond to pipes in an EASY episode.
 - **Action space** \\(\mathbb{A}\\). For Flappy Bird, \\(\mathbb{A} = \\{0, 1\\}\\), where action \\(1\\) means to focus (high precision) and action \\(0\\) means to not focus (low precision).
 - **Transition probability kernel** \\(P(s' \mid s, a)\\) for \\(s,s'\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\). \\(P(s' \mid s, a)\\) denotes the probability of transitioning to state \\(s'\\) in the next time step when taking action \\(a\\) at state \\(s\\). For Flappy Bird, the transition probabilities are illustrated by <a href='#fig:mdp'>Figure 4</a>.
 - **Reward function** \\(r(s, a)\\) for \\(s\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\), denoting the immediate reward when taking action \\(a\\) at state \\(s\\). For Flappy Bird, \\(r(k, 1) = 1\\), \\(r(k+m, 1) = r(k+m,0) = 1\\), and \\(r(s,a) = 0\\) for other \\((s,a)\\)-pairs. 
@@ -116,7 +117,7 @@ where \\(S\_t\\) is the state at time \\(t\\) and \\(A\_t\\) is the action at ti
 <figure id="fig:mdp" style="text-align: center;">
 <img src="./mdp.png" alt="MDP"  style="max-height: 30vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 4</b>: Illustration of the MDP.  Cycles denote the states, and arrows denote possible transitions. A black arrow corresponds to a success event (passing a pipe) within an epside, which triggers a transition to the next state (next pipe within the episode).
-    A green arrow corresponds to a success event at the end of an episode, which generates 1 unit of reward and triggeres a transition to state 1 (the first pipe in a hard episode) or state k+1 (the first pipe in an easy episode) with equal probability. A red arrow corresponds to a failure event (hitting a pipe), which causes a transition to state 1. A failure event happens with probability p when the arm is in states 1,2, ..., k and is not activated. 
+    A green arrow corresponds to a success event at the end of an episode, which generates 1 unit of reward and triggeres a transition to state 1 (the first pipe in a HARD episode) or state k+1 (the first pipe in an EASY episode) with equal probability. A red arrow corresponds to a failure event (hitting a pipe), which causes a transition to state 1. A failure event happens with probability p when the arm is in states 1,2, ..., k and is not activated. 
 </figcaption>
 </figure>
 
@@ -142,93 +143,43 @@ where \\(S\_t(i)\\) is the state of arm \\(i\\) at time \\(t\\) and \\(A\_t(i)\\
 </figure>
 
 
+## <span style="color:blue"> More backgrounds on restless bandits </span>
+<span style="color:blue"> We briefly provide some background on restless bandits. Restless bandits is a subclass of _multiarm bandits_, which refers to the general class of problems where the decision maker needs to repeatedly choose among a set of options ("arms") with unknown reward, trying to collect as much reward as possible; the word "bandit" makes an anlogy with the slot machines in casino.
+(refer to an image in this link)
+https://en.wiktionary.org/wiki/File:Antique_one-armed_bandit,_Ventnor,_Isle_of_Wight,_UK.jpg
+Multi-armed bandit is a huge field, with different problem formulations. We refer the readers to  
+(add a link to a good textbook on bandits) for an overview.
+</span>
 
-Restless bandits were introduced in Peter Whittle’s [seminal paper](https://www.cambridge.org/core/journals/journal-of-applied-probability/article/abs/restless-bandits-activity-allocation-in-a-changing-world/DDEB5E22AFFEFF50AA97ADC96B71AE35) in 1988. “Restless” refers to the fact that every arm keeps evolving over time whether it is being acted on or not (in contrast to the more classical “rested bandits", where inactive arms freeze). 
-The restless bandit problem could be used to model a wide range of real-life problems. 
-For instance, in the same spirit as the Flappy-bird-octopus problem, restless bandits could model the management of multiple ongoing projects with two groups of staffs, one group of staffs is more dexterous by have limited availabilities, whereas the other group is more available but is less effective. 
-Other applications involve job scheduling, machine maintenance, wireless communication, content moderation, etc. 
+<span style="color:blue">
+The prior formulation closest to restless bandits is called _rested bandits_, _Markovian bandits_, or simply _bandits_, where the decision maker pulls one arm at a time, and each arm generates reward and changes its state only when it is pulled. Using our example, the rested bandit problem is more like a human playing Flappy Bird, who works on one session at a time and pauses all other sessions. In real life, rested bandits is a very fundamental model for dynamic resource allocation, where the decision maker is allocating resource among multiple projects, and wants to push forward the most promising project. 
+The optimal policy for rested bandit problem is an elegant policy known as the Gittins index (add a link to Gittins). 
+We refer the readers to ... for a survey.
+(add a link to a good prior work on rested bandits; search for Gittins' recent survey)
+</span>
 
-The restless bandit problem is fundamentally difficult. Intuitively, the problem can be viewed a huge MDP whose state space is the Cartesian product of all arms' state spaces, which grows exponentially with the number of arms. Formal hardness results have also been proved (see, e.g., Theorem 3 of [this paper](https://www.jstor.org/stable/3690486?seq=10)).
+Restless bandits were introduced as a generalization of rested bandits, in Peter Whittle’s [seminal paper](https://www.cambridge.org/core/journals/journal-of-applied-probability/article/abs/restless-bandits-activity-allocation-in-a-changing-world/DDEB5E22AFFEFF50AA97ADC96B71AE35) in 1988. “Restless” refers to the fact that every arm keeps evolving over time. Unlike rested bandits where simple optimal policies are known, the restless bandit problem is fundamentally difficult. Intuitively, the problem can be viewed a huge MDP whose state space is the Cartesian product of all arms' state spaces, which grows exponentially with the number of arms. Formal hardness results have also been proved (see, e.g., Theorem 3 of [this paper](https://www.jstor.org/stable/3690486?seq=10)). 
+
+<span style="color:blue">
+The restless bandit problem has a wide range of real-life applications. 
+A very recent application is the content moderation on social media: Current social media platform often employ an AI-human pipeline to detect and remove content that violate the platform policy, where AI is used to estimate the post' probability policy violation and predict its future visibility, and the platform needs to assign human moderators to review the content, prioritizing those with higher probability of violation and future visibility.
+Recent researches from Meta and MIT (Add link to this work https://arxiv.org/abs/2505.21331) has modeled this problem as restless bandits, where each content is modeled as an arm, whose state is its past trajectory of number of views and predicted probability of violation. The state of an arm changes restlessly, and every decision period, the platform needs to assign a limited pool of human moderators to a subset of unreviewed contents based on their states. 
+</span>
+There are lots of other traditional applications, involve job scheduling, machine maintenance, wireless communication, etc. 
+
+
+
+# Policy Construction {#construction}
+
+<span style="color:blue">
+
 
 Because of the hardness, we aim for asymptotic guarantees rather than exact solutions. Concretely, a policy \\(\pi\\) is called *asymptotically optimal* if 
 $$
 \lim\_{N\to\infty} \bigl(R\_N^\* - R\_N^\pi\bigr) = 0,
 $$
 where \\(R\_N^\* \triangleq \sup_{\pi} R\_N^\pi\\) denotes the optimal long-run average reward.
-
-
-<!-- Stick to "session" or "MDP" to refer to "arm / bandit" -->
-
-
-
-
-
-<!-- # Model
-
-
-### Each session as a Markov Decision Process (MDP)
-
-(An important possible confusion: each state is a pipe, or an episode? There are two episodes? infinitely many episode? Maybe use colors on the states to clarify, or explicitly draw the mapping... )
-
-We consider the games as changing at discrete times. 
-Each game has a state, i.e., which episodes the bird is in and how long long until the episode ends. 
-Based on the state of the game, Sakiko can choose to interfere, or not interfere --- which means let a bot operate for this time step. 
-The decisions leads to differet immediate and future consequences. 
-
-To analyze in detail the consequence of different decisions, 
-we model each game as a Markov Markov Decision Process (MDP). 
-An MDP is defined by four elements: _state space_, _action space_, _transition probabilities_, and _reward function_. In this example, 
-- State space $\mathbb{S} = \{1,2,\dots k, k+1, \dots k+m\}$, where the first $k$ states correspond to pipes in a difficult episode, and the last $m$ states correspond to pipes in an easy episode. 
-- Action space $\mathbb{A} =\{0,1\}$, where action $1$ means to interfere, and action $0$ means to not interfere. 
-- The state transitions randomly, and the distribution of the next state depends on the current state and action. 
-- The reward is also a function of the current state and action. 
-
-
-Decription of state transition (illustrated by [Figure 3](#fig:mdp)):
-- Each time, success or fail. The success prob. depends on whether it is a hard or easy episode ($s\leq k$ or $s > k$) and whether Sakiko interferes. 
-- If success in the middle of an episode, move forward. 
-- If success in the at the end of an episode, jump to state $1$ (the beginning of the difficult episode) or the state $k+1$ (the beginning of the easy episode) with equal probabilities, and get $1$ unit of reward; if fail start over from state $1$ (in a difficult episode). 
-
-
-<figure id="fig:mdp" style="text-align: center;">
-<img src="../../static/2025/restless-bandits/mdp.png" alt="MDP"  style="max-height: 35vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 3</b>: Illustration of the MDP.  Cycles denote the states, and arrows denote possible transitions. A black arrow corresponds to a success event within an epside, a green arrow corresponds to a success event at the end of an episode, and a red arrow corresponds to a failure event. 
-</figcaption>
-</figure>
-
-More precisely, the transition probabilities and the reward function can be represented in the form of the transition kernel $(P(s,a,s'))_{s,s'\in\mathbb{S}, a\in\mathbb{A}}$ and reward function $(r(s,a))_{s\in\mathbb{S},a\in\mathbb{A}}$, 
-where $P(s,a,s')$ denotes the probability of going to state $s'$ in the next time step, when takes action $a$ at state $s$, and $r(s,a)$ denotes the reward of taking action $a$ at state $s$. 
-Here we omit writing them out the transition in full for concreteness; instead, we specify them in the pseudo-code. 
-```python
-import numpy as np
-
-def get_next_state_and_reward(s,a):
-    # If in an easy episode or being interfered
-    if (s >= k+1) or (a == 1):
-        p_succ = 1
-    # If in a hard episode or being interfered
-    else:
-        p_succ = 0.1
-    p_fail = 1 - p_succ
-
-    if (s < k) or (k+1 <= s < k+m): 
-        # in the middle of an episode
-        success = np.random.binomial(n=1, p=p_succ)
-        next_state = s+1 if success else 1
-        reward = 0
-    else: 
-        # at the end of an episode
-        go_to_1 = np.random.binomial(n=1, p=p)
-        next_state = 1 if go_to_1 else k+1
-        reward = p_succ
-    return next_state, reward
-``` -->
-
-
-
-
-
-# Policy Construction {#construction}
+</span>
 
 **Q**: How should we efficiently compute an asymptotically optimal policy for restless bandits? 
 
@@ -238,7 +189,7 @@ As mentioned in the last section, the state space of the problem grows exponenti
 
 **A**: Yes. Since each arm has a relatively small state space, so any standard techniques for MDPs could apply, such as value iteration, policy iteration, or linear programing (see, e.g., Chapter 8 of [Puterman'94](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316887)). 
 
-Specializing to Flappy Bird, the policy that optimizes the reward a single arm should be obvious: any policy \\(\bar{\pi}\\) that chooses the "focus" action on all states in \\(1,2,3,..k\\) (pipes in hard episode), i.e., 
+Specializing to Flappy Bird, the policy that optimizes the reward a single arm should be obvious: any policy \\(\bar{\pi}\\) that chooses the "focus" action on all states in \\(1,2,3,..k\\) (pipes in HARD episode), i.e., 
 $$
 \bar{\pi}(1|s) = 1 \quad \text{for} \quad s\in\\{1,2,\dots, k\\}
 $$
@@ -259,7 +210,7 @@ $$
 $$
 This problem imposes an additional budget constraint, requiring this arm to be active for no more than \\(\alpha\\) fraction of the time in the long run. 
 This budget constraint is a relaxed version of the every-time-step constraint in restelss bandits. 
-By adding this relaxed constraint, we hope to make this sub-problem closer to the original problem, while still being easy to solve. 
+By adding this relaxed constraint, we hope to make this sub-problem closer to the original problem, while still being EASY to solve. 
 
 For the Flappy Bird example, suppose \\(\alpha = k/(k+m)\\), it is not hard to see that the optimal solution \\(\bar{\pi}^\*\\) for this budget-constrained single-armed problem is given by
 <span id="eq:single-arm-with-constraint"></span>
@@ -270,7 +221,7 @@ $$
 0 \quad &\text{for} \quad s\notin\\{1,2,\dots, k\\}.
 \end{cases} \tag{3}
 $$
-Intuitively, this policy chooses to focus only when necessary, i.e., when in a hard episode. 
+Intuitively, this policy chooses to focus only when necessary, i.e., when in a HARD episode. 
 
 For other \\(\alpha\\) or more general problems, the single-armed problem under budget constraint should be treated as a _contrained MDP_, and there are many existing algorithm in the literature for solving it. One particular way is through linear programming, and we refer the readers to Section 3.3 of [our paper](https://arxiv.org/abs/2402.05689) for the details. 
 
@@ -315,10 +266,10 @@ R\_N^\pi \geq R\_1^{\bar{\pi}^\*} - o(1) \geq R\_N^\* - o(1),
 $$
 i.e., \\(\pi\\) would be asymptotically optimal.
 
-Specializing to the Flappy Bird example, an instance of \\(\bar{\pi}^\*\\)-guided policy focuses on as many arms in the states \\(\\{1,2,3,\dots, k\\}\\) (i.e., in hard episodes) as possible, and uses a tie-breaking rule when there are more than \\(\alpha N\\) such arms. 
+Specializing to the Flappy Bird example, an instance of \\(\bar{\pi}^\*\\)-guided policy focuses on as many arms in the states \\(\\{1,2,3,\dots, k\\}\\) (i.e., in HARD episodes) as possible, and uses a tie-breaking rule when there are more than \\(\alpha N\\) such arms. 
 
 What should be the right tie-breaking rule? In the next two subsections, we will discuss this design choice. 
-For the ease of presentation, we let the number of states in a hard episode \\(k=4\\), number of states in an easy episode \\(m=21\\), failure probability \\(p=0.9\\), and \\(\alpha = k/(k+m) = 0.16\\). Consequently, the optimal single-armed policy is given by \\(\bar{\pi}^\*(1|s) = 1\\) iff \\(s\in\\{1,2,3,4\\}\\) and \\(R\_1^{\bar{\pi}^\*} = 2/(k+m) = 0.08\\).
+For the ease of presentation, we let the number of states in a HARD episode \\(k=4\\), number of states in an EASY episode \\(m=21\\), failure probability \\(p=0.9\\), and \\(\alpha = k/(k+m) = 0.16\\). Consequently, the optimal single-armed policy is given by \\(\bar{\pi}^\*(1|s) = 1\\) iff \\(s\in\\{1,2,3,4\\}\\) and \\(R\_1^{\bar{\pi}^\*} = 2/(k+m) = 0.08\\).
 
 
 ## Tie-Breaking Rule: a Naive Attempt
@@ -333,7 +284,7 @@ For the ease of presentation, we let the number of states in a hard episode \\(k
 
 **Q**: Wny does this happen? 
 
-**A**: When all arms are initialized in states \\(\\{1,2,3,4\\}\\), they all require persistent focuses to pass the hard episode and reach the rest of the state space. However, under the random tie-breaking rule, each arm is activated with probability \\(\alpha = 0.16\\), and fails with probability \\((1-\alpha)\*p = 0.756\\). Consequently, most arms cannot succeed \\(4\\) times in a row and will keep falling back to state \\(1\\). 
+**A**: When all arms are initialized in states \\(\\{1,2,3,4\\}\\), they all require persistent focuses to pass the HARD episode and reach the rest of the state space. However, under the random tie-breaking rule, each arm is activated with probability \\(\alpha = 0.16\\), and fails with probability \\((1-\alpha)\*p = 0.756\\). Consequently, most arms cannot succeed \\(4\\) times in a row and will keep falling back to state \\(1\\). 
 
 
 <figure id="fig:random-tb" style="text-align: center;">
@@ -362,7 +313,7 @@ The index / priority policies are proved to be asymptotically optimal under a fe
 **A**: Consider the following simple tie-breaking rule: we always prioritize arm \\(i\\) over arm \\(j\\) to follow \\(\bar{\pi}^\*\\) for any \\(1\leq i < j \leq N\\). We call the resulting \\(\bar{\pi}^\*\\)-guided policy the _ID policy_, as it break ties using the IDs (\\(i\\) and \\(j\\)) of the arms. 
 In this way, the arms with small ID are likely to keep receiving a high priority and could follow \\(\bar{\pi}^\*\\) for a long time.
 
-Translating to the Flappy Bird example, the ID policy simply looks at all arms in states \\(1,2,3,4\\) (hard episodes); when there are more than \\(\alpha N\\) such arms, the policy focus on \\(\alpha N\\) of them with the smallest IDs. 
+Translating to the Flappy Bird example, the ID policy simply looks at all arms in states \\(1,2,3,4\\) (HARD episodes); when there are more than \\(\alpha N\\) such arms, the policy focus on \\(\alpha N\\) of them with the smallest IDs. 
 
 **Q**: Does this work?
 
