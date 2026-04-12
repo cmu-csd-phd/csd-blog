@@ -46,7 +46,7 @@ In this game, a bird flies through a forest of pipes, and the player controls th
 Despite appearing simple, Flappy Bird is a very hard game for humans. Even for dexterous players, it requires a lot of attention and effort; for beginners, it is all about luck. 
 
 <figure id="fig:flappy" style="text-align: center;">
-<img src="./flappy-bird.png" alt="flappy" style="max-height: 40vh; width: auto;"/>
+<img src="./flappy-bird.png" alt="A screenshot of Flappy Bird showing an orange bird flying to the right through a field of green pipe obstacles, each consisting of a top pipe and bottom pipe with a gap between them" style="max-height: 40vh; width: auto;"/>
  <figcaption style="margin-top: 0.5em;"> <b>Figure 1</b>: Flappy Bird </figcaption>
 </figure>
 
@@ -58,7 +58,7 @@ Here is what Sakiko can do:
     - The rest of the arms operate at a lower precision. These arms could make mistakes with probability \\(p\\) for some fixed \\(0 < p < 1\\) when the vertical spaces between pipes are narrow; when the spaces are wide, these arms do not make mistakes. 
 
 <figure id="fig:sakiko" style="text-align: center;">
-<img src="./my_sakiko.png" alt="Sakiko" style="max-height: 30vh; width: auto;"/> 
+<img src="./my_sakiko.png" alt="A smiling blue octopus plush toy with black button eyes and eight stubby tentacles, serving as the blog post mascot" style="max-height: 30vh; width: auto;"/> 
  <figcaption style="margin-top: 0.5em;"> <b>Figure 2</b>: A Selfie of Sakiko </figcaption>
 </figure>
 
@@ -67,7 +67,7 @@ Now consider a version of Flappy Bird that consists of infinitely many _episodes
 There are two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces)<span style="color:blue">, and they can have different numbers of pipes. The first episode after restart is always HARD, whereas each subsequent episode's type is sampled with uniform probabilities each time when the bird enters it. The setting is illustrated in Figure 3 below.</span>
 
 <figure id="fig:episode" style="text-align: center;">
-<img src="./episode-explained.png" alt="episode" style="max-height: 30vh; width: auto;"/> 
+<img src="./episode-explained.png" alt="Diagram showing three consecutive Flappy Bird episodes separated by Score +1 markers. Episode 1 is labeled 'HARD episode'; Episodes 2 and 3 are labeled 'Random types with equal probabilities'. An orange bird is shown flying rightward through green pipe obstacles in Episode 1." style="max-height: 30vh; width: auto;"/> 
  <figcaption style="margin-top: 0.5em;"> <b>Figure 3</b>: <span style="color:blue">The first episode is always HARD episode, whereas the subsequent episodes' types are sampled randomly when they start. The game restarts from the first episode at failure.</span> </figcaption>
 </figure>
 
@@ -89,7 +89,7 @@ The rules of Flappy-Bird-Octopus problem are concretely summarized as follows:
 
 
 <figure id="fig:flappy-octopus" style="text-align: center;">
-<img src="./flappy-bird-octopus.png" alt="flappy-bird-octopus"  style="max-height: 60vh; width: auto;"/>
+<img src="./flappy-bird-octopus.png" alt="Diagram with four Flappy Bird game states on the left (labeled HARD episode 1st pipe, HARD episode 3rd pipe, EASY episode 4th pipe, EASY episode 3rd pipe). Green arrows labeled 'focus' connect the two HARD states to the blue octopus mascot on the right; red arrows labeled 'no focus' connect the two EASY states. Text reads 'N sessions, focus on at most alpha N'."  style="max-height: 60vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 4</b>: Illustration of the Flappy-Bird-Octopus problem. Sakiko sees the current episode type and pipe number of each session, and decides which session(s) to focus on.
 </figcaption>
 </figure>
@@ -120,7 +120,7 @@ where \\(S\_t\\) is the state at time \\(t\\) and \\(A\_t\\) is the action at ti
 
 
 <figure id="fig:mdp" style="text-align: center;">
-<img src="./mdp.png" alt="MDP"  style="max-height: 32vh; width: auto;"/>
+<img src="./mdp.png" alt="Markov chain diagram for the Flappy Bird single-arm MDP. States 1 through k+m are arranged in a row. Black arrows show Success transitions advancing the bird to the next state. Red arcs labeled Failure reset from states 1 through k back to state 1. A long green arc labeled Success with score branches from state k to both state 1 and state k+1, representing two equally likely transitions upon completing the hard episode; a similar green arc from state k+m leads back to state 1 and state k+1."  style="max-height: 32vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 5</b>: Illustration of the MDP.  Cycles denote the states, and arrows denote possible transitions and rewards under success or failure. A failure happens with probability p when the arm is in states 1,2, ..., k and is not activated. 
 </figcaption>
 </figure>
@@ -141,7 +141,7 @@ where \\(S\_t(i)\\) is the state of arm \\(i\\) at time \\(t\\) and \\(A\_t(i)\\
 
 
 <figure id="fig:rb" style="text-align: center;">
-<img src="./rb.png" alt="RB"  style="max-height: 60vh; width: auto;"/>
+<img src="./rb.png" alt="Diagram showing four copies of the Flappy Bird MDP, each with an orange bird at a different state position. A blue octopus mascot on the right is labeled N arms activate at most alpha N. Green active arrows connect the top two MDPs to the octopus; red passive arrows connect the bottom two, illustrating a feasible combination of actions under the budget constraint."  style="max-height: 60vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 6</b>: Illustration of the restless bandit problem. <span style="color:blue"> Each block refers to an arm or a session of Flappy Bird; the "active" action means focusing on this session, whereas "passive" means to not focus.</span>
 </figcaption>
 </figure>
@@ -316,7 +316,7 @@ For the ease of presentation, we let the number of states in a HARD episode \\(k
 <span style="color:blue">**A**: SJF can indeed work well for the Flappy Bird example. However, for general MDPs there may be no such intuitive heuristic. Moreover, there are examples where all policies of similar forms as SJF fail ("index policy" or "priority policy"), as noted in the remark below. This motivates looking for a tie-breaking rule that works provably well across all instances.</span> -->
 
 <figure id="fig:random-tb" style="text-align: center;">
-<img src="./RandomTBAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="Random Tie-breaking" style="max-height: 40vh; width: auto;"/>
+<img src="./RandomTBAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="Animated histogram showing how arm states evolve over time under the random tie-breaking policy with N=500 arms. Arms remain trapped near state 1 throughout, failing to spread to the full state space, illustrating poor performance." style="max-height: 40vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 8</b>: Random tie-breaking rule is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
 </figcaption>
 </figure>
@@ -325,7 +325,7 @@ For the ease of presentation, we let the number of states in a HARD episode \\(k
 
 <!-- <div class="remark" style="background: linear-gradient(90deg,#fbfbff,#f7fcff); border-left:4px solid #4b84f0; padding:1em; border-radius:8px; box-shadow:0 6px 18px rgba(18,35,58,0.06); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size:0.95rem; line-height:1.5; color:#111;"> -->
 
-**Remark.** In the prior work on restless bandits, a dominant class of policies is the so-called index policies or priority policies. These policies can be roughly viewed as a \\(\bar{\pi}^\*\\)-guided policy with a more sophisticated tie-breaking rule that ranks arms by their current state ---- <span style="color:blue"> for example, in the Flappy Bird setting, prioritizing arms in states \\(\\{1,2,3,4\\}\\) by their pipe index (state 4 first, then 3, etc.). This particular ranking resembles the classical Shortest-Job-First (SJF) scheduling heuristic, and indeed works well in the Flappy Bird example. However, in general, index / priority policies do not always succeed: there exist documented instances where all index / priority policies fail to be asymptotically optimal.</span>
+**Remark.** In the prior work on restless bandits, a dominant class of policies is the so-called index policies or priority policies. These policies can be roughly viewed as a \\(\bar{\pi}^\*\\)-guided policy with a more sophisticated tie-breaking rule that ranks arms by their current state ---- <span style="color:blue"> for example, in the Flappy Bird setting, prioritizing arms in states \\(\\{1,2,3,4\\}\\) by their pipe index (state 4 first, then 3, etc.). This particular ranking resembles the classical Shortest-Job-First (SJF) scheduling heuristic, and indeed works well in the Flappy Bird example. However, beyond the Flappy Bird example, index / priority policies do not always succeed: there exist documented instances where every index / priority policy fails to be asymptotically optimal. Such instances are known as "locally unstable" and are often found among randomly generated MDPs — see, for example, the three-state instances in Appendix E of [Gast, Gaujal, Yan 2020](https://arxiv.org/abs/2012.09064). Figure 7 of [our paper](https://arxiv.org/abs/2402.05689) further visualizes how frequently such instances arise under different sampling distributions over MDPs. </span>
 
 The key limiting assumption behind the optimality proofs for index / priority policies is the so-called _global attractor property (GAP)_. <span style="color:blue">Intuitively, GAP requires that the system naturally self-corrects: no matter where the arms start, their empirical state distribution eventually concentrates near the "ideal" stationary distribution of \\(\bar{\pi}^\*\\). Formally, it</span> assumes that the state distribution of the arms converges to a \\(o(1)\\) neighborhood of the stationary distribution under the \\(\bar{\pi}^\*\\) policy, effectively assuming away the bad situation illustrated in <a href='#fig:random-tb'>Figure 8</a>. However, there exist documented instances where GAP fails. We refer the readers to Section 2 of [our paper](https://arxiv.org/abs/2402.05689) for a review of the status of the prior work. To see some concrete illustrations of the simulation results on these instances, see Section 8 of [our paper](https://arxiv.org/abs/2402.05689) and Section 3.3 of [our previous paper](https://arxiv.org/abs/2306.00196).
 
@@ -349,7 +349,7 @@ Translating to the Flappy Bird example, the ID policy simply looks at all arms i
 
 
 <figure id="fig:id-policy" style="text-align: center;">
-<img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="ID policy" style="max-height: 40vh; width: auto;"/>
+<img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="Animated histogram showing how arm states evolve over time under the ID policy with N=500 arms. Arms gradually spread from being concentrated at state 1 to a near-uniform distribution across all states, illustrating successful convergence." style="max-height: 40vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 9</b>: ID policy is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
 </figcaption>
 </figure>
@@ -405,10 +405,10 @@ The process described above is illustrated in <a href='#fig:proof'>Figure 10</a>
 
 
 <figure id="fig:proof" style="text-align: center;">
-<img src="./proof-step-1.jpg" alt="proof-step-1" style="max-height: 30vh; width: auto;"/>
-<img src="./proof-step-2.jpg" alt="proof-step-2" style="max-height: 30vh; width: auto;"/>
-<img src="./proof-step-3.jpg" alt="proof-step-3" style="max-height: 30vh; width: auto;"/>
-<img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad_ideal_annotate.gif" alt="proof-step-animate" style="max-height: 30vh; width: auto;"/>
+<img src="./proof-step-1.jpg" alt="Histogram of arm states at time step 0: all 500 arms are concentrated at state 1, with no arms in any other state. About 80% of the bar is dark blue and a small fraction is cyan, indicating that most arms are not yet following their ideal actions." style="max-height: 30vh; width: auto;"/>
+<img src="./proof-step-2.jpg" alt="Histogram of arm states at time step 56: arms are beginning to spread across all states. A small dark blue fraction remains at state 1, while cyan bars of varying heights appear across all other states, indicating that a growing number of arms are following their ideal actions and mixing toward the stationary distribution." style="max-height: 30vh; width: auto;"/>
+<img src="./proof-step-3.jpg" alt="Histogram of arm states at time step 106: arms are spread fairly evenly across all states. The dark blue fraction at state 1 has shrunk to a small sliver, while cyan bars dominate and are nearly uniformly distributed, indicating that almost all arms are now following their ideal actions." style="max-height: 30vh; width: auto;"/>
+<img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad_ideal_annotate.gif" alt="Animated histogram showing the full dynamics of the ID policy. Dark blue portions represent arms not yet following their ideal actions; cyan portions represent arms that are. Over time, the cyan portions expand progressively across all states as more arms begin following their ideal actions, until nearly all arms have converged to the stationary distribution." style="max-height: 30vh; width: auto;"/>
     <figcaption style="margin-top: 0.5em;"> <b>Figure 10</b>: The dynamics of ID policy when applied to the Flappy Bird example. The cyan part of the bar represents the number of arms following the ideal actions. 
 </figcaption>
 </figure>
