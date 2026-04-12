@@ -9,7 +9,7 @@ date = 2026-02-03
 areas = ["Theory"]
 # Tags can be set to a collection of a few keywords specific to your blogpost.
 # Consider these similar to keywords specified for a research paper.
-tags = ["restless bandits", "long-run average reward", "asymptotic optimality"]
+tags = ["restless bandits", "long-run average reward"]
 
 [extra]
 author = {name = "Yige Hong", url = "https://www.cs.cmu.edu/~yigeh/" }
@@ -22,10 +22,10 @@ committee = [
 +++
 
 
-In this blog, we explain the recent progresses on an important class of stochastic sequential decision problems, called _restless bandits_, based on our paper _[Unichain and aperiodicity are sufficient for asymptotic optimality of average-reward restless bandits](https://arxiv.org/abs/2402.05689)_. 
-We will also briefly mention the generalization to multiple-actions, multiple-constraints, and heterogeneous arm in the followup paper _[Projection-based Lyapunov method for fully heterogeneous weakly-coupled MDPs](https://www.arxiv.org/abs/2502.06072)_. 
+In this blog, we explain the recent progress on an important class of stochastic sequential decision problems, called _restless bandits_, based on our paper _[Unichain and aperiodicity are sufficient for asymptotic optimality of average-reward restless bandits](https://arxiv.org/abs/2402.05689)_. 
+We will also briefly mention the generalization to multiple-actions, multiple-constraints, and heterogeneous arms in the follow-up paper _[Projection-based Lyapunov method for fully heterogeneous weakly-coupled MDPs](https://www.arxiv.org/abs/2502.06072)_. 
 
-The rest of the blog is organized as follows. [Section 1](#motivation) motivates the problem with a simple example; [Section 2](#model) gives a formal model; [Section 3](#construction) outlines the construction of our policy; [Section 4](#optimality) states the main optimality result; [Section 5](#proof-idea) sketches the proof idea; and [Section 6](#generalizations) discusses extensions.
+The rest of the blog is organized as follows. [Section 1](#motivation) motivates the problem with a simple example; [Section 2](#model) gives a formal model; [Section 3](#construction) outlines the construction of our policy; [Section 4](#optimality) states the main optimality result and sketches the proof idea; and [Section 5](#generalizations) discusses extensions.
 
 <!-- 
 # Overview
@@ -41,9 +41,9 @@ We first introduce RB via a made-up example. Then build towards our policy. Then
 Finally, a bit of generalizations -->
 
 # Motivating Problem: Flappy Bird for Octopus {#motivation}
-Flappy Bird is an arcade-style mobile game that once gots viral at around 2014.
-In this game, a bird to flies through a forest of pipes, and the player controls the vertical movements of the bird to avoid the pipes; the goal is to pass as many pipes as possible before hitting a pipe. 
-Despite appearing simple, Flappy Bird is a very hard game for humans. Even for dexterous players, it requires lots of attention and effort; for beginners, it is all about luck. 
+Flappy Bird is an arcade-style mobile game that once went viral around 2014.
+In this game, a bird flies through a forest of pipes, and the player controls the vertical movements of the bird to avoid the pipes; the goal is to pass as many pipes as possible before hitting a pipe. 
+Despite appearing simple, Flappy Bird is a very hard game for humans. Even for dexterous players, it requires a lot of attention and effort; for beginners, it is all about luck. 
 
 <figure id="fig:flappy" style="text-align: center;">
 <img src="./flappy-bird.png" alt="flappy" style="max-height: 40vh; width: auto;"/>
@@ -55,7 +55,7 @@ Here is what Sakiko can do:
 - Sakiko has \\(N\\) arms and can play Flappy Bird on \\(N\\) devices simultaneously.
 - At any moment, Sakiko can choose to focus on any \\(\alpha N\\) arms for some fixed \\(0 < \alpha < 1\\) such that \\(\alpha N\\) is integer. 
     - The focused arms operate at a high precision and never make mistakes. 
-    - The rest of the arms operate at a lower precision. These arms could make mistakes with probability \\(p\\) when the vertical spaces between pipes are narrow, for some fixed \\(0 < p < 1\\); when the spaces are wide, these arms do not make mistakes. 
+    - The rest of the arms operate at a lower precision. These arms could make mistakes with probability \\(p\\) for some fixed \\(0 < p < 1\\) when the vertical spaces between pipes are narrow; when the spaces are wide, these arms do not make mistakes. 
 
 <figure id="fig:sakiko" style="text-align: center;">
 <img src="./my_sakiko.png" alt="Sakiko" style="max-height: 30vh; width: auto;"/> 
@@ -63,12 +63,16 @@ Here is what Sakiko can do:
 </figure>
 
 Now consider a version of Flappy Bird that consists of infinitely many _episodes_, each with multiple pipes. 
-<span style="color:blue"> When the bird reaches the end of an episode, a unit of score is generated, and the game restarts from a new episodes; when the bird hits a pipe, the game also restarts from an episode but with no score.</span> 
-There two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces). <span style="color:blue"> When an episode starts, its type is randomly sampled according to the following rule:</span>
-- <span style="color:blue">If the bird reaches the end of the previous episode, the new episode's type is EASY or HARD with equal probabilities.</span>
-- <span style="color:blue">If the bird hits a pipe in the previous episode, the new episode's type is always HARD.</span>
+<span style="color:blue"> When the bird reaches the end of an episode, it enters a new episode and receives a unit of score; when the bird hits a pipe, the game restarts from the initial episode, with no score generated.</span> 
+There are two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces)<span style="color:blue">, and they can have different numbers of pipes. The first episode after restart is always HARD, whereas each subsequent episode's type is sampled with uniform probabilities each time when the bird enters it. The setting is illustrated in Figure 3 below.</span>
 
-As illustrated in <a href='#fig:flappy-octopus'>Figure 3</a>, Sakiko's goal is to play \\(N\\) sessions of Flappy Bird simultaneously and maximize the the long-run average score per unit of time by choosing the right subset of sessions to focus on. 
+<figure id="fig:episode" style="text-align: center;">
+<img src="./episode-explained.png" alt="episode" style="max-height: 30vh; width: auto;"/> 
+ <figcaption style="margin-top: 0.5em;"> <b>Figure 3</b>: <span style="color:blue">The first episode is always HARD episode, whereas the subsequent episodes' types are sampled randomly when they start. The game restarts from the first episode at failure.</span> </figcaption>
+</figure>
+
+
+As illustrated in <a href='#fig:flappy-octopus'>Figure 4</a>, Sakiko's goal is to play \\(N\\) sessions of Flappy Bird simultaneously and maximize the long-run average score per unit of time by choosing the right subset of sessions to focus on. 
 We call this problem the Flappy-Bird-Octopus problem. 
 The rules of Flappy-Bird-Octopus problem are concretely summarized as follows:
 - The problem operates in discrete time, with time steps indexed by \\(t=0,1,2,\dots\\)
@@ -86,28 +90,29 @@ The rules of Flappy-Bird-Octopus problem are concretely summarized as follows:
 
 <figure id="fig:flappy-octopus" style="text-align: center;">
 <img src="./flappy-bird-octopus.png" alt="flappy-bird-octopus"  style="max-height: 60vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 3</b>: Illustration of the Flappy-Bird-Octopus problem. 
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 4</b>: Illustration of the Flappy-Bird-Octopus problem. Sakiko sees the current episode type and pipe number of each session, and decides which session(s) to focus on.
 </figcaption>
 </figure>
 
 
 
-Naively, Sakiko could certainly focus on a fixed \\(\alpha N\\) sessions, but since not all episodes are HARD, a smarter strategy is to dynamically decide which session to focus on, based on the session's current episode type and the progress within the episode. 
+Naively, Sakiko could certainly focus on a fixed \\(\alpha N\\) sessions, but since not all episodes are HARD, a smarter strategy is to dynamically decide which session(s) to focus on, based on the session's current episode type and the progress within the episode. 
 
 
 # Model: Restless Bandits {#model}
 
 Each session of Flappy Bird can be modeled as a _Markov Decision Process (MDP)_,
 which has a _state_ (the episode type and pipe index) that changes over time.
-The decision maker takes an _action_ (to focus or not focus) every time step, which affects the _state transition probabilities_ and the _reward_ (score). The goal is to take a proper action based on the state, to maximize the average reward over the long run. 
+The decision maker takes an _action_ (to focus or not focus) every time step, which affects the _state transition probabilities_ and the _reward_ (score). <span style="color:blue"> The goal is to take actions _adaptively_ based on the current state</span>, to maximize the average reward over the long run.
 
 Formally, an MDP is defined by a tuple \\((\mathbb{S}, \mathbb{A}, P, r)\\):
 - **State space** \\(\mathbb{S}\\). For Flappy Bird, \\(\mathbb{S} = \\{1, 2, \ldots, k, k+1, \ldots, k+m\\}\\), where states \\(1\\) to \\(k\\) correspond to pipes in a HARD episode and states \\(k+1\\) to \\(k+m\\) correspond to pipes in an EASY episode.
 - **Action space** \\(\mathbb{A}\\). For Flappy Bird, \\(\mathbb{A} = \\{0, 1\\}\\), where action \\(1\\) means to focus (high precision) and action \\(0\\) means to not focus (low precision).
-- **Transition probability kernel** \\(P(s' \mid s, a)\\) for \\(s,s'\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\). \\(P(s' \mid s, a)\\) denotes the probability of transitioning to state \\(s'\\) in the next time step when taking action \\(a\\) at state \\(s\\). For Flappy Bird, the transition probabilities are illustrated by <a href='#fig:mdp'>Figure 4</a>.
-- **Reward function** \\(r(s, a)\\) for \\(s\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\), denoting the immediate reward when taking action \\(a\\) at state \\(s\\). For Flappy Bird, \\(r(k, 1) = 1\\), \\(r(k+m, 1) = r(k+m,0) = 1\\), and \\(r(s,a) = 0\\) for other \\((s,a)\\)-pairs. 
+- **Transition probability kernel** \\(P(s\' \mid s, a)\\) for \\(s,s\'\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\). \\(P(s\' \mid s, a)\\) denotes the probability of transitioning to state \\(s\'\\) in the next time step when taking action \\(a\\) at state \\(s\\). For Flappy Bird, the transition probabilities are illustrated by <a href='#fig:mdp'>Figure 5</a>.
+- **Reward function** \\(r(s, a)\\) for \\(s\in\mathbb{S}\\) and \\(a\in\mathbb{A}\\), denoting the immediate reward when taking action \\(a\\) at state \\(s\\). <span style="color:blue">For Flappy Bird, \\(r(k, 1) = 1\\), \\(r(k, 0) = 1-p\\), \\(r(k+m, 1) = r(k+m, 0) = 1\\), and \\(r(s,a) = 0\\) for all other \\((s,a)\\)-pairs. Intuitively, a unit of reward is earned upon completing an episode, and \\(1-p\\) reflects the probability of successfully passing the last pipe of a HARD episode without focus.</span>
 
-A _policy_ \\(\\bar{\\pi} = (\\bar{\\pi}(a|s))\_{s\in\mathbb{S},a\in\mathbb{A}}\\) is a conditional distribution of the actions given states. The _long-run average reward_ under policy \\(\\bar{\\pi}\\) is defined as:
+A _policy_ \\(\\bar{\\pi} = (\\bar{\\pi}(a|s))\_{s\in\mathbb{S},a\in\mathbb{A}}\\) is a conditional distribution of the actions given states, <span style="color:blue">which adaptively samples the actions based on the observed current states.</span> 
+The _long-run average reward_ under policy \\(\\bar{\\pi}\\) is defined as:
 $$
 R\_1^{\bar{\pi}} = \lim\_{T \to \infty} \frac{1}{T} \sum\_{t=0}^{T-1} \mathbb{E}\left[ r(S\_t, A\_t) \right],
 $$
@@ -115,13 +120,12 @@ where \\(S\_t\\) is the state at time \\(t\\) and \\(A\_t\\) is the action at ti
 
 
 <figure id="fig:mdp" style="text-align: center;">
-<img src="./mdp.png" alt="MDP"  style="max-height: 30vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 4</b>: Illustration of the MDP.  Cycles denote the states, and arrows denote possible transitions. A black arrow corresponds to a success event (passing a pipe) within an epside, which triggers a transition to the next state (next pipe within the episode).
-    A green arrow corresponds to a success event at the end of an episode, which generates 1 unit of reward and triggeres a transition to state 1 (the first pipe in a HARD episode) or state k+1 (the first pipe in an EASY episode) with equal probability. A red arrow corresponds to a failure event (hitting a pipe), which causes a transition to state 1. A failure event happens with probability p when the arm is in states 1,2, ..., k and is not activated. 
+<img src="./mdp.png" alt="MDP"  style="max-height: 32vh; width: auto;"/>
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 5</b>: Illustration of the MDP.  Cycles denote the states, and arrows denote possible transitions and rewards under success or failure. A failure happens with probability p when the arm is in states 1,2, ..., k and is not activated. 
 </figcaption>
 </figure>
 
-The sequential decision problem that Sakiko faces is the so-called _restless bandits_, which involves controlling multiple MDPs simultaneously with a joint _budget constraint_ on the actions (to only focus on no more than \\(\alpha N\\) sessions). 
+The sequential decision problem that Sakiko faces is <span style="color:blue">known as the</span> _restless bandits_, which involves controlling multiple MDPs simultaneously with a joint _budget constraint_ on the actions (to only focus on no more than \\(\alpha N\\) sessions). 
 Each MDP is also called an _arm_ (here: a Flappy Bird session/device); each arm admits two actions, active (focus) and passive (no focus). 
 The control rule of restless bandits is again described by a policy \\(\pi\\), but now it is a conditional probability of the joint actions of all arms (elements in \\(\mathbb{A}^N\\)), given their joint states (elements in \\(\mathbb{S}^N\\)). 
 The goal of restless bandit is to find a policy \\(\pi\\) that maximizes the long-run average reward per arm and per unit time, subject to the budget constraint, i.e.,
@@ -138,58 +142,73 @@ where \\(S\_t(i)\\) is the state of arm \\(i\\) at time \\(t\\) and \\(A\_t(i)\\
 
 <figure id="fig:rb" style="text-align: center;">
 <img src="./rb.png" alt="RB"  style="max-height: 60vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 5</b>: Illustration of the restless bandit problem. 
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 6</b>: Illustration of the restless bandit problem. <span style="color:blue"> Each block refers to an arm or a session of Flappy Bird; the "active" action means focusing on this session, whereas "passive" means to not focus.</span>
 </figcaption>
 </figure>
 
 
-## <span style="color:blue"> More backgrounds on restless bandits </span>
-<span style="color:blue"> We briefly provide some background on restless bandits. Restless bandits is a subclass of _multiarm bandits_, which refers to the general class of problems where the decision maker needs to repeatedly choose among a set of options ("arms") with unknown reward, trying to collect as much reward as possible; the word "bandit" makes an anlogy with the slot machines in casino.
-(refer to an image in this link)
-https://en.wiktionary.org/wiki/File:Antique_one-armed_bandit,_Ventnor,_Isle_of_Wight,_UK.jpg
-Multi-armed bandit is a huge field, with different problem formulations. We refer the readers to  
-(add a link to a good textbook on bandits) for an overview.
-</span>
+## More Backgrounds on Restless Bandits
+<span style="color:blue">We briefly provide some background on restless bandits. The word "bandit" draws an analogy with a type of slot machines in the casino called one-armed bandit, where the gambler pulls the lever (arm) to collect an unknown amount of payoffs. With a limited budget, the gambler must pull the arms strategically, with the goal of figuring out which arm is likely to give higher reward through trial and error. 
+Mathematicians have been using _multi-armed bandits_ to refer to the general class of sequential decision problems where the decision maker repeatedly chooses among a set of options (arms), each with a different and unknown reward, trying to collect as much reward as possible. 
+Over time, multi-armed bandits have grown into a broad field with many different problem formulations and applications. We refer readers to [Lattimore and Szepesvári (2020)](https://tor-lattimore.com/downloads/book/book.pdf) for a comprehensive review of the field.</span>
 
-<span style="color:blue">
-The prior formulation closest to restless bandits is called _rested bandits_, _Markovian bandits_, or simply _bandits_, where the decision maker pulls one arm at a time, and each arm generates reward and changes its state only when it is pulled. Using our example, the rested bandit problem is more like a human playing Flappy Bird, who works on one session at a time and pauses all other sessions. In real life, rested bandits is a very fundamental model for dynamic resource allocation, where the decision maker is allocating resource among multiple projects, and wants to push forward the most promising project. 
-The optimal policy for rested bandit problem is an elegant policy known as the Gittins index (add a link to Gittins). 
-We refer the readers to ... for a survey.
-(add a link to a good prior work on rested bandits; search for Gittins' recent survey)
-</span>
+<figure id="fig:one-armed-bandit" style="text-align: center;">
+<img src="./one-armed-bandit.jpg" alt="An antique one-armed bandit slot machine"  style="max-height: 40vh; width: auto;"/>
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 7</b>: An antique one-armed bandit (slot machine), Ventnor, Isle of Wight, UK. (from Wikipedia)
+</figcaption>
+</figure>
 
-Restless bandits were introduced as a generalization of rested bandits, in Peter Whittle’s [seminal paper](https://www.cambridge.org/core/journals/journal-of-applied-probability/article/abs/restless-bandits-activity-allocation-in-a-changing-world/DDEB5E22AFFEFF50AA97ADC96B71AE35) in 1988. “Restless” refers to the fact that every arm keeps evolving over time. Unlike rested bandits where simple optimal policies are known, the restless bandit problem is fundamentally difficult. Intuitively, the problem can be viewed a huge MDP whose state space is the Cartesian product of all arms' state spaces, which grows exponentially with the number of arms. Formal hardness results have also been proved (see, e.g., Theorem 3 of [this paper](https://www.jstor.org/stable/3690486?seq=10)). 
+<span style="color:blue">Restless bandits, specifically, is a generalization of a more classical model called _rested Markovian bandits_ or simply _rested bandits_. 
+In rested bandits, each arm is a Markov chain, which, when being pulled, generates reward based on its current state and transitions to a new state; the decision maker can only pull one arm at a time. 
+When a gambler models the slot machines as rested bandits, they would maintain an estimate of "how profitable a slot machine could be" based on the past outcomes of pulling it; this estimate can be viewed as a Markov chain state, which updates randomly based on the outcomes. 
+Rested bandits could also model problems with completely different flavor than slot machines, such as job scheduling and project management.
+The optimal policy for the rested bandit problem is an elegant index rule known as the [Gittins index](https://people.eecs.berkeley.edu/~russell/classes/cs294/s11/readings/Gittins:1979.pdf). 
+We refer readers to [Gittins, Glazebrook, and Weber (2011)](https://toc.library.ethz.ch/objects/pdf/e01_978-0-470-67002-6_01.pdf) for a comprehensive review on this model.</span>
+<!-- The state of a rested bandit arm is more flexible: it can also model  the state of an arm can represent the status of an ongoing project, and the decision maker chooses to make progress in one project at a time. -->
+<!-- Using our Flappy Bird example, the rested bandit problem is more like choosing to play one session at a time and pausing all other sessions.  -->
+<!-- Rested bandits is a natural model for scheduling: suppose a student is involved in multiple research projects, and can only make progress on one of them at a time. Then the student need to decide, based on the state of each project, which one to prioritize. The consideration involve balancing the long term reward, and short term reward.  -->
+<!-- In practice, rested bandits serve as a fundamental model for dynamic resource allocation, where a decision maker allocates limited resources across multiple projects with the goal of advancing the most promising one.  -->
 
-<span style="color:blue">
-The restless bandit problem has a wide range of real-life applications. 
-A very recent application is the content moderation on social media: Current social media platform often employ an AI-human pipeline to detect and remove content that violate the platform policy, where AI is used to estimate the post' probability policy violation and predict its future visibility, and the platform needs to assign human moderators to review the content, prioritizing those with higher probability of violation and future visibility.
-Recent researches from Meta and MIT (Add link to this work https://arxiv.org/abs/2505.21331) has modeled this problem as restless bandits, where each content is modeled as an arm, whose state is its past trajectory of number of views and predicted probability of violation. The state of an arm changes restlessly, and every decision period, the platform needs to assign a limited pool of human moderators to a subset of unreviewed contents based on their states. 
-</span>
-There are lots of other traditional applications, involve job scheduling, machine maintenance, wireless communication, etc. 
+<span style="color:blue"> Despite its generality, rested bandits are still limited by its defining assumptions: it pulls one arm at a time and freezes all other arms that are not pulled. 
+To address this limitation, Peter Whittle proposed restless bandits in his [seminal paper](https://www.cambridge.org/core/journals/journal-of-applied-probability/article/abs/restless-bandits-activity-allocation-in-a-changing-world/DDEB5E22AFFEFF50AA97ADC96B71AE35) in 1988. </span>
 
+<span style="color:blue">The restless bandit problem has a wide range of real-life applications. An interesting recent example is content moderation on social media: platforms often employ an AI-human pipeline to detect and remove policy-violating content, where AI estimates each post’s probability of violation and predicts its future visibility, and the platform must assign human moderators to review content, prioritizing those with the highest likelihood of violation and broadest reach. 
+Recent work by [Gocmen et al. (2025)](https://arxiv.org/abs/2505.21331) from Meta and MIT has modeled this as a restless bandit problem, where each piece of content is treated as an arm, whose state encodes its history of views and predicted probability of violation. 
+Each arm’s state evolves restlessly over time, and at every decision period, the platform must assign a limited pool of human moderators to a subset of unreviewed content based on their current states. 
+There are many other applications as well, such as job scheduling, machine maintenance, and wireless communication.</span>
 
 
 # Policy Construction {#construction}
 
+<span style="color:blue">In this section, we present the _ID policy_ — our main policy for restless bandits — and explain how it is constructed. The policy itself is defined in the [Key Idea subsection](#key-idea-enforcing-persistency-via-the-id-policy) below; readers interested only in the result may skip ahead. For readers who want to understand the construction: we first discuss the optimality criterion, then build towards the ID policy through a sequence of Q&As. Along the way, we also comment on a natural class of prior approaches — index and priority policies — and explain why they fall short in general, which motivates the ID policy.</span>
+
 <span style="color:blue">
+We start with bad news: unlike rested bandits where a simple optimal policy is known, the restless bandit problem is fundamentally hard to optimize, with formal hardness results proved in 1999 (see Theorem 3 of [this paper](https://www.jstor.org/stable/3690486?seq=10)).
+This is perhaps not very surprising, since the number of possible combinations of the arms' states grows exponentially with \\(N\\). 
+</span>
+<!-- restless bandits itself is a huge MDP, whose state space is the Cartesian product of $N$ arms’ state spaces, i.e., -->
 
+Because of the hardness, we aim for asymptotic guarantees rather than exact solutions. <span style="color:blue">Specifically, we will construct a policy \\(\pi\\) under which the suboptimality gap
+$$
+   R\_N^\* - R\_N^\pi  = O(1/\sqrt{N}),
+$$
+where \\(R\_N^\* \triangleq \sup_{\pi} R\_N^\pi\\) denotes the optimal long-run average reward. In particular, the suboptimality gap vanishes as \\(N\to\infty\\), i.e., the reward per arm approaches optimality as the number of arms grows — a property known as *asymptotic optimality* in the restless bandit literature.</span>
 
-Because of the hardness, we aim for asymptotic guarantees rather than exact solutions. Concretely, a policy \\(\pi\\) is called *asymptotically optimal* if 
+<!-- Concretely, a policy \\(\pi\\) is called *asymptotically optimal* if 
 $$
 \lim\_{N\to\infty} \bigl(R\_N^\* - R\_N^\pi\bigr) = 0,
 $$
-where \\(R\_N^\* \triangleq \sup_{\pi} R\_N^\pi\\) denotes the optimal long-run average reward.
-</span>
+where \\(R\_N^\* \triangleq \sup_{\pi} R\_N^\pi\\) denotes the optimal long-run average reward. -->
 
-**Q**: How should we efficiently compute an asymptotically optimal policy for restless bandits? 
+**Q**: How should we efficiently compute a policy with \\(O(1/\sqrt{N})\\) suboptimality gap?
 
-As mentioned in the last section, the state space of the problem grows exponentially with the number of arms, \\(N\\), so we definitely do not want to start with a fully general policy class. Restricting to a smaller policy class is necessary. 
+**A**: As mentioned in the last section, the state space of the problem grows exponentially with the number of arms, \\(N\\), so we definitely do not want to start with a fully general policy class. Restricting to a smaller policy class is necessary. 
 
 **Q**: Forget about the \\(N\\)-armed problem. Let's say we want to optimize the reward of a single arm, ignoring all the constraints. Can we find an optimal policy efficiently?
 
-**A**: Yes. Since each arm has a relatively small state space, so any standard techniques for MDPs could apply, such as value iteration, policy iteration, or linear programing (see, e.g., Chapter 8 of [Puterman'94](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316887)). 
+**A**: Yes. Since each arm has a relatively small state space, any standard techniques for MDPs could apply, such as value iteration, policy iteration, or linear programing (see, e.g., Chapter 8 of [Puterman'94](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470316887)). 
 
-Specializing to Flappy Bird, the policy that optimizes the reward a single arm should be obvious: any policy \\(\bar{\pi}\\) that chooses the "focus" action on all states in \\(1,2,3,..k\\) (pipes in HARD episode), i.e., 
+Specializing to Flappy Bird, the policy that optimizes the reward of a single arm should be obvious: any policy \\(\bar{\pi}\\) that chooses the "focus" action on all states in \\(1,2,3,..k\\) (pipes in HARD episode), i.e., 
 $$
 \bar{\pi}(1|s) = 1 \quad \text{for} \quad s\in\\{1,2,\dots, k\\}
 $$
@@ -197,7 +216,7 @@ achieves the optimal long-run average reward, which is \\(2/(k+m)\\).
 Intuitively, by choosing the "focus" action on all states in \\(1,2,3,..k\\), the bird keeps passing all pipes with probability \\(1\\), and thus scores in the fastest possible way.
 
 However, the above condition does not exclude some "wasteful" policies --- a naive one would simply choose to always focus.
-Such a wasteful single-armed policy is not useful for guiding the original problem problem, which has a budget constraint of focusing on \\(\leq \alpha N\\) arms every time step.
+Such a wasteful single-armed policy is not useful for guiding the original problem, which has a budget constraint of focusing on \\(\leq \alpha N\\) arms every time step.
 
 **Q**: How to define a more "budget-efficient" single-armed policy that maximizes the reward?
 
@@ -209,8 +228,8 @@ $$
 \end{aligned} \tag{2}
 $$
 This problem imposes an additional budget constraint, requiring this arm to be active for no more than \\(\alpha\\) fraction of the time in the long run. 
-This budget constraint is a relaxed version of the every-time-step constraint in restelss bandits. 
-By adding this relaxed constraint, we hope to make this sub-problem closer to the original problem, while still being EASY to solve. 
+This budget constraint is a relaxed version of the every-time-step constraint in restless bandits. 
+By adding this relaxed constraint, we hope to make this sub-problem closer to the original problem, while still being easy to solve. 
 
 For the Flappy Bird example, suppose \\(\alpha = k/(k+m)\\), it is not hard to see that the optimal solution \\(\bar{\pi}^\*\\) for this budget-constrained single-armed problem is given by
 <span id="eq:single-arm-with-constraint"></span>
@@ -223,13 +242,17 @@ $$
 $$
 Intuitively, this policy chooses to focus only when necessary, i.e., when in a HARD episode. 
 
-For other \\(\alpha\\) or more general problems, the single-armed problem under budget constraint should be treated as a _contrained MDP_, and there are many existing algorithm in the literature for solving it. One particular way is through linear programming, and we refer the readers to Section 3.3 of [our paper](https://arxiv.org/abs/2402.05689) for the details. 
+For other \\(\alpha\\) or more general problems, the single-armed problem under budget constraint should be treated as a _constrained MDP_, and there are many existing algorithms in the literature for solving it. One particular way is through linear programming, and we refer the readers to Section 3.3 of [our paper](https://arxiv.org/abs/2402.05689) for the details. 
 
 
 
 
 
-**Q**: How does \\(\bar{\pi}^\*\\) help us design policies for the restless bandit problem?
+**Q**: <span style="color:blue">\\(\bar{\pi}^\*\\) is defined for a single arm. Can it be applied to the restless bandit problem?</span>
+
+**A**: <span style="color:blue">Since each arm in the restless bandit has the same MDP structure, \\(\bar{\pi}^\*\\) can in principle be applied to each arm independently.</span>
+
+**Q**: <span style="color:blue">How does \\(\bar{\pi}^\*\\) help us design policies for the full \\(N\\)-armed problem?</span>
 
 **A**: First, notice that
 <span id="eq:upper-bound"></span>
@@ -244,7 +267,7 @@ Intuitively, under any feasible policy \\(\pi\\) of [(1)](#eq:N-arm-problem), a 
 
 In light of [(4)](#eq:upper-bound), a policy \\(\pi\\) would be optimal if it were able to sample the action for each arm \\(i\\) from the distribution \\(\bar{\pi}^\*(\cdot|S\_t(i))\\) for every time step \\(t\\), as this would imply \\(R\_N^\pi = R\_1^{\bar{\pi}^\*} \geq R\_N^\*\\). In other words, \\(\bar{\pi}^\*\\) defines the idealized action distributions that each arm wants to follow.
 
-While exactly following \\(\bar{\pi}^\*\\) is often impossible due to the stricter the budget constraint of [(1)](#eq:N-arm-problem), we could still try to let as many arms as possible follow \\(\bar{\pi}^\*\\). Specifically, consider the following class of policies:
+While exactly following \\(\bar{\pi}^\*\\) is often impossible due to the stricter budget constraint of [(1)](#eq:N-arm-problem), we could still try to let as many arms as possible follow \\(\bar{\pi}^\*\\). Specifically, consider the following class of policies:
 
 **\\(\\bar{\pi}^\*\\)-guided policy**: For each time step \\(t = 0, 1, 2, \ldots\\):
 
@@ -260,13 +283,15 @@ While exactly following \\(\bar{\pi}^\*\\) is often impossible due to the strict
 
 4. **Execute actions** and observe state transitions for each arm.
 
-Different tie-breaking rules yield different policies and may lead to different performances. The hope is that with a proper tie-breaking rule, in the steady state, all but an \\(o(1)\\) fraction of arms follow \\(\bar{\pi}^*\\), since this would imply 
+Different tie-breaking rules yield different policies and may lead to different performances. The hope is that with a proper tie-breaking rule, in the steady state, all but an \\(O(1/\sqrt{N})\\) fraction of arms follow \\(\bar{\pi}^*\\), since this would imply 
 $$
-R\_N^\pi \geq R\_1^{\bar{\pi}^\*} - o(1) \geq R\_N^\* - o(1),
+R\_N^\pi \geq R\_1^{\bar{\pi}^\*} - O(1/\sqrt{N}) \geq R\_N^\* - O(1/\sqrt{N}),
 $$
-i.e., \\(\pi\\) would be asymptotically optimal.
+i.e., \\(\pi\\) would have an \\(O(1/\sqrt{N})\\) suboptimality gap.
 
-Specializing to the Flappy Bird example, an instance of \\(\bar{\pi}^\*\\)-guided policy focuses on as many arms in the states \\(\\{1,2,3,\dots, k\\}\\) (i.e., in HARD episodes) as possible, and uses a tie-breaking rule when there are more than \\(\alpha N\\) such arms. 
+Specializing to the Flappy Bird example, an instance of \\(\bar{\pi}^\*\\)-guided policy focuses on as many arms in the states \\(\\{1,2,3,\dots, k\\}\\) (i.e., in HARD episodes) as possible, and uses a tie-breaking rule when there are more than \\(\alpha N\\) such arms.
+<!-- 
+<span style="color:blue">**General recipe.** The \\(\bar{\pi}^\*\\)-guided policy framework gives a two-step recipe for building good policies for any restless bandit instance: (1) solve the budget-constrained single-arm problem [(2)](#eq:single-arm-problem-with-constraint) to obtain \\(\bar{\pi}^\*\\); (2) apply \\(\bar{\pi}^\*\\) to each arm independently, using a tie-breaking rule to enforce the joint budget constraint. Step (1) is an instance-specific computation that can even be learned from data; step (2) is a universal, instance-agnostic procedure. The key remaining question is the choice of tie-breaking rule.</span> -->
 
 What should be the right tie-breaking rule? In the next two subsections, we will discuss this design choice. 
 For the ease of presentation, we let the number of states in a HARD episode \\(k=4\\), number of states in an EASY episode \\(m=21\\), failure probability \\(p=0.9\\), and \\(\alpha = k/(k+m) = 0.16\\). Consequently, the optimal single-armed policy is given by \\(\bar{\pi}^\*(1|s) = 1\\) iff \\(s\in\\{1,2,3,4\\}\\) and \\(R\_1^{\bar{\pi}^\*} = 2/(k+m) = 0.08\\).
@@ -275,21 +300,24 @@ For the ease of presentation, we let the number of states in a HARD episode \\(k
 ## Tie-Breaking Rule: a Naive Attempt
 
 
-**Q**: Can we break ties uniformy at random? 
+**Q**: Can we break ties uniformly at random? 
 
 <!-- randomly select a session that requires focus (i.e., a hard episode) -->
 
 
-**A**: No. As shown in <a href='#fig:random-tb'>Figure 6</a> below, most arms stuck in the state \\(\\{1,2,3,4\\}\\), suggesting that the most birds keep hitting the pipes and fail to pass any episode. The average reward after simulting \\(10^4\\) time steps is \\(0.0058\\), which is much smaller than the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
+**A**: No. As shown in <a href='#fig:random-tb'>Figure 8</a> below, most arms are stuck in the state \\(\\{1,2,3,4\\}\\), suggesting that most birds keep hitting the pipes and fail to pass any episode. The average reward after simulating \\(10^4\\) time steps is \\(0.0058\\), which is much smaller than the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
 
-**Q**: Wny does this happen? 
+**Q**: Why does this happen? 
 
-**A**: When all arms are initialized in states \\(\\{1,2,3,4\\}\\), they all require persistent focuses to pass the HARD episode and reach the rest of the state space. However, under the random tie-breaking rule, each arm is activated with probability \\(\alpha = 0.16\\), and fails with probability \\((1-\alpha)\*p = 0.756\\). Consequently, most arms cannot succeed \\(4\\) times in a row and will keep falling back to state \\(1\\). 
+**A**: When all arms are initialized in states \\(\\{1,2,3,4\\}\\), they all require persistent focus to pass the HARD episode and reach the rest of the state space. However, under the random tie-breaking rule, each arm is activated with probability \\(\alpha = 0.16\\), and fails with probability \\((1-\alpha)\*p = 0.756\\). Consequently, most arms cannot succeed \\(4\\) times in a row and will keep falling back to state \\(1\\).
 
+<!-- <span style="color:blue">**Q**: What about a smarter tie-breaking rule, such as prioritizing arms that are closest to completing the HARD episode (i.e., arms in higher-numbered states within \\(\\{1,2,3,4\\}\\))? This resembles the classical Shortest-Job-First (SJF) scheduling heuristic.</span>
+
+<span style="color:blue">**A**: SJF can indeed work well for the Flappy Bird example. However, for general MDPs there may be no such intuitive heuristic. Moreover, there are examples where all policies of similar forms as SJF fail ("index policy" or "priority policy"), as noted in the remark below. This motivates looking for a tie-breaking rule that works provably well across all instances.</span> -->
 
 <figure id="fig:random-tb" style="text-align: center;">
 <img src="./RandomTBAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="Random Tie-breaking" style="max-height: 40vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 6</b>: Random tie-breaking rule is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 8</b>: Random tie-breaking rule is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
 </figcaption>
 </figure>
 
@@ -297,9 +325,9 @@ For the ease of presentation, we let the number of states in a HARD episode \\(k
 
 <!-- <div class="remark" style="background: linear-gradient(90deg,#fbfbff,#f7fcff); border-left:4px solid #4b84f0; padding:1em; border-radius:8px; box-shadow:0 6px 18px rgba(18,35,58,0.06); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size:0.95rem; line-height:1.5; color:#111;"> -->
 
-**Remark.** In the prior work on restless bandits, a dominant class of policies is the so-called index policies or priority policies. These policies can be roughly viewed as a \\(\bar{\pi}^\*\\)-guided policy using a more sophisticated tie-breaking rule, which ranks the arms based on their states.  
+**Remark.** In the prior work on restless bandits, a dominant class of policies is the so-called index policies or priority policies. These policies can be roughly viewed as a \\(\bar{\pi}^\*\\)-guided policy with a more sophisticated tie-breaking rule that ranks arms by their current state ---- <span style="color:blue"> for example, in the Flappy Bird setting, prioritizing arms in states \\(\\{1,2,3,4\\}\\) by their pipe index (state 4 first, then 3, etc.). This particular ranking resembles the classical Shortest-Job-First (SJF) scheduling heuristic, and indeed works well in the Flappy Bird example. However, in general, index / priority policies do not always succeed: there exist documented instances where all index / priority policies fail to be asymptotically optimal.</span>
 
-The index / priority policies are proved to be asymptotically optimal under a few assumption, one of them being the so-called _global attractor property (GAP)_. GAP assumes that the state distribution of the arms converge to a \\(o(1)\\) neighborhood of the stationary distribution of the \\(\bar{\pi}^\*\\) policy, effectively assuming away the bad situation illusrated in <a href='#fig:mdp'>Figure 6</a>. However, there exist documented instances where GAP fails. We refer the readers to Section 2 of [our paper](https://arxiv.org/abs/2402.05689) for a review of the tatus of the prior work. To see some concrete illustration of the simulation results on these instances, see Section 8 of [our paper](https://arxiv.org/abs/2402.05689) and Section 3.3 of [our previous paper](https://arxiv.org/abs/2306.00196). 
+The key limiting assumption behind the optimality proofs for index / priority policies is the so-called _global attractor property (GAP)_. <span style="color:blue">Intuitively, GAP requires that the system naturally self-corrects: no matter where the arms start, their empirical state distribution eventually concentrates near the "ideal" stationary distribution of \\(\bar{\pi}^\*\\). Formally, it</span> assumes that the state distribution of the arms converges to a \\(o(1)\\) neighborhood of the stationary distribution under the \\(\bar{\pi}^\*\\) policy, effectively assuming away the bad situation illustrated in <a href='#fig:random-tb'>Figure 8</a>. However, there exist documented instances where GAP fails. We refer the readers to Section 2 of [our paper](https://arxiv.org/abs/2402.05689) for a review of the status of the prior work. To see some concrete illustrations of the simulation results on these instances, see Section 8 of [our paper](https://arxiv.org/abs/2402.05689) and Section 3.3 of [our previous paper](https://arxiv.org/abs/2306.00196).
 
 <!-- <p>Intuitively, the limitation stems from weak control over the population distribution: greedy state-priority rules do not ensure the persistent and targeted effort some MDPs require. Prior work regarded controlling the distribution as prohibitively complex --— our results show that persistency is the key and that distributional control is achievable under much weaker conditions than previously thought.</p> -->
 
@@ -310,51 +338,58 @@ The index / priority policies are proved to be asymptotically optimal under a fe
 ## Key Idea: Enforcing Persistency via the ID Policy
 **Q**: As discussed above, the random tie-breaking rule fails because it lacks persistency. What would be a natural tie-breaking rule that encodes the persistency?
 
-**A**: Consider the following simple tie-breaking rule: we always prioritize arm \\(i\\) over arm \\(j\\) to follow \\(\bar{\pi}^\*\\) for any \\(1\leq i < j \leq N\\). We call the resulting \\(\bar{\pi}^\*\\)-guided policy the _ID policy_, as it break ties using the IDs (\\(i\\) and \\(j\\)) of the arms. 
+**A**: Consider the following simple tie-breaking rule: we always prioritize arm \\(i\\) over arm \\(j\\) to follow \\(\bar{\pi}^\*\\) for any \\(1\leq i < j \leq N\\). We call the resulting \\(\bar{\pi}^\*\\)-guided policy the _ID policy_, as it breaks ties using the IDs (\\(i\\) and \\(j\\)) of the arms. 
 In this way, the arms with small ID are likely to keep receiving a high priority and could follow \\(\bar{\pi}^\*\\) for a long time.
 
-Translating to the Flappy Bird example, the ID policy simply looks at all arms in states \\(1,2,3,4\\) (HARD episodes); when there are more than \\(\alpha N\\) such arms, the policy focus on \\(\alpha N\\) of them with the smallest IDs. 
+Translating to the Flappy Bird example, the ID policy simply looks at all arms in states \\(1,2,3,4\\) (HARD episodes); when there are more than \\(\alpha N\\) such arms, the policy focuses on \\(\alpha N\\) of them with the smallest IDs. 
 
 **Q**: Does this work?
 
-**A**: Yes. As illustrated in <a href='#fig:id-policy'>Figure 7</a>, the state distribution of the arms gradually converge to the uniform distribution, after which most arms are able to continuously pass the episodes without triggering many failure events. The average reward turns out to be about \\(0.0774\\) after simulating \\(10^4\\) time steps, which is close to the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
+**A**: Yes. As illustrated in <a href='#fig:id-policy'>Figure 9</a>, the state distribution of the arms gradually converges to the uniform distribution, after which most arms are able to continuously pass the episodes without triggering many failure events. The average reward turns out to be about \\(0.0774\\) after simulating \\(10^4\\) time steps, which is close to the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
 
 
 <figure id="fig:id-policy" style="text-align: center;">
 <img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad.gif" alt="ID policy" style="max-height: 40vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 7</b>: ID policy is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 9</b>: ID policy is applied to the Flappy-Bird example with N=500. The height of each bar counts the number of arms in each state. 
 </figcaption>
 </figure>
 
-
+<span style="color:blue">**Recipe summary.** To build a good policy for any restless bandit instance, follow two steps: (1) find the best policy for a single arm subject to a long-run budget constraint (i.e., the arm is active at most \\(\alpha\\) fraction of the time on average); (2) at each time step, let every arm independently decide whether it wants to be active according to this single-arm policy, and whenever more than \\(\alpha N\\) arms want to be active, fulfill as many requests as possible by prioritizing arms with smaller IDs. Together, these two steps yield the ID policy, which has a provable near-optimality guarantee on a broad class of instances — as we will state precisely in the next section.</span>
 
 # Optimality Result {#optimality}
 
-To state our main result, we first define a few notation. Consider the Markov chain on the state space \\(\mathbb{S}\\) induced by the policy \\(\bar{\pi}^\*\\). 
-We let \\(\mu^\*\\) be the stationary distribution of this Markov chain, and let \\(P^t(s,s')\\) be the \\(t\\)-step transition matrix. 
+To state our main result, we first define some notation. Consider the Markov chain on the state space \\(\mathbb{S}\\) induced by the policy \\(\bar{\pi}^\*\\). 
+We let \\(\mu^\*\\) be the stationary distribution of this Markov chain, and let \\(P^t(s,s\')\\) be the \\(t\\)-step transition matrix. 
 We define the mixing time \\(\tau\\) of this Markov chain as 
 \\[
-\tau \triangleq \max\_{s\in\mathbb{S}} \min \left\\{t=0,1,2\dots \colon \sum\_{s'\in\mathbb{S}} \left|P^t(s,s') - \mu^\*(s') \right| \leq \frac{1}{e} \right\\}.
+\tau \triangleq \max\_{s\in\mathbb{S}} \min \left\\{t=0,1,2\dots \colon \sum\_{s\'\in\mathbb{S}} \left|P^t(s,s\') - \mu^\*(s\') \right| \leq \frac{1}{e} \right\\}.
 \\]
 Intuitively, given any initial state \\(s\in\mathbb{S}\\), after \\(\tau\\) time steps, the state distribution of the Markov chain \\(P^t(s,\cdot)\\) is sufficiently close to the stationary distribution \\(\mu^*(\cdot)\\).  
 
 
-**Theorem 1** (informal): Assume \\(\tau < \infty\\), and let \\(\pi\\) be the ID policy. Then 
+**Theorem 1**: Assume \\(\tau < \infty\\), and let \\(\pi\\) be the ID policy. Then 
 <!-- $$
     R^{rel} - R(\pi, \bm{S}\_0) \leq \frac{672\lambda\_W^{5/2}|\mathbb{S}|^{3/2}}{\min(\alpha,1-\alpha)^3\sqrt{N}}.
 $$ -->
 $$
     R\_1^{\bar{\pi}^\*} - R\_N^\pi = O\left(\frac{\tau^4}{\sqrt{N}}\right),
 $$
-where the constant factor in the big-O notation involve the parameters \\(|\mathbb{S}|\\), \\(\alpha\\), and \\(\max\_{s,a} |r(s,a)|\\). 
+where the constant factor in the big-O notation involves the parameters \\(|\mathbb{S}|\\), \\(\alpha\\), and \\(\max\_{s,a} |r(s,a)|\\). 
 
 
-**Remark**: The mixing time \\(\tau\\) is finite when the underlying Markov chain is aperiodic and irreducible. One can easily see that this condition is satisfied by the Flappy Bird example under the single-armed policy \\(\bar{\pi}^\*\\).
+**Remark**: <span style="color:blue">The mixing time assumption says that when an arm follows \\(\bar{\pi}^\*\\), its state converges to the stationary distribution \\(\mu^\*\\) within \\(\tau\\) time steps, regardless of where it started. In other words, \\(\bar{\pi}^\*\\) _randomizes_ the arm's state in \\(\tau\\) steps, pulling it away from any bad initial state and making the states of different arms effectively independent. This independence enables a multiplexing effect, preventing the situation where a lot of arms require to be active simultaneously. </span> <br>
+<!-- This independence enables a multiplexing effect: once the arms have mixed, they request to be active with probability exactly \\(\alpha\\) each, so their total budget requests concentrate around \\(\alpha N\\), which fits the constraints. -->
+
+<span style="color:blue">
+For the Flappy Bird example, under \\(\bar{\pi}^\*\\), the bird always successfully passes every pipe, and then randonly transitions to a new episode that is HARD or EASY with equal probability. 
+When the lengths of HARD and EASY episodes are relatively prime, the location of the bird after a sufficiently long time would be uniform over all states, implying the mixing. 
+</span>
 
 
-# Proof Idea of Theorem 1 {#proof-idea}
+**Proof idea of Theorem 1:**
+
 One might wonder why this simple ID-based tie-breaking works. 
-As discussed in the [Section 3](#construction), this boils down to proving that after a certain period of time, all but \\(o(1)\\) fraction of arms could follow the ideal actions sampled from \\(\bar{\pi}^\*\\).  
+As discussed in the [Section 3](#construction), this boils down to proving that after a certain period of time, all but an \\(o(1)\\) fraction of arms could follow the ideal actions sampled from \\(\bar{\pi}^\*\\).  
 Here is the intuitive argument: 
 
 1. First, since we can activate at most \\(\alpha N\\) arms, \\(\alpha N\\) arms with the smallest IDs always follow \\(\bar{\pi}^\*\\) under the ID policy.
@@ -364,9 +399,9 @@ Here is the intuitive argument:
 
 3. Now consider the remaining \\((1-\alpha)N\\) arms: we can activate at about \\(\alpha N - \alpha^2 N = \alpha (1-\alpha) N\\) of them, i.e., \\(\alpha\\) fraction of the remaining arms. Repeating the argument in Step 2, the states of these arms will also mix to \\(\mu^\*\\) after some time. 
 
-4. Repeating this process, the number of remaining arms not following \\(\mu^\*\\) should approximately shrink by \\((1-\alpha)\\)-proportion in each phase. In the long run, all but \\(o(1)\\) fraction of arms could follow \\(\bar{\pi}^\*\\), where the \\(o(1)\\) error terms comes from the randomness in the budget requirements of the arms that have mixed. 
+4. Repeating this process, the number of remaining arms not following \\(\mu^\*\\) should approximately shrink by \\((1-\alpha)\\)-proportion in each phase. In the long run, all but an \\(o(1)\\) fraction of arms could follow \\(\bar{\pi}^\*\\), where the \\(o(1)\\) error terms come from the randomness in the budget requirements of the arms that have mixed. 
 
-The process described above is illustrated in <a href='#fig:proof'>Figure 8</a>: from time step \\(0\\) to \\(56\\) to \\(106\\), more and more arms start to follow \\(\bar{\pi}^\*\\) (cyan parts of the bars), and their empirical state distribution approaches the uniform distribution. 
+The process described above is illustrated in <a href='#fig:proof'>Figure 10</a>: from time step \\(0\\) to \\(56\\) to \\(106\\), more and more arms start to follow \\(\bar{\pi}^\*\\) (cyan parts of the bars), and their empirical state distribution approaches the uniform distribution. 
 
 
 <figure id="fig:proof" style="text-align: center;">
@@ -374,14 +409,17 @@ The process described above is illustrated in <a href='#fig:proof'>Figure 8</a>:
 <img src="./proof-step-2.jpg" alt="proof-step-2" style="max-height: 30vh; width: auto;"/>
 <img src="./proof-step-3.jpg" alt="proof-step-3" style="max-height: 30vh; width: auto;"/>
 <img src="./IDAnimation-flappy-4-21-0.1-N-500-T-300-init-bad_ideal_annotate.gif" alt="proof-step-animate" style="max-height: 30vh; width: auto;"/>
-    <figcaption style="margin-top: 0.5em;"> <b>Figure 8</b>: The dynamics of ID policy when applied to the Flappy Bird example. The cyan part of the bar represents the number of arms following the ideal actions. 
+    <figcaption style="margin-top: 0.5em;"> <b>Figure 10</b>: The dynamics of ID policy when applied to the Flappy Bird example. The cyan part of the bar represents the number of arms following the ideal actions. 
 </figcaption>
 </figure>
 
 
 This multi-phase argument covers most intuitions of the proof, except that in the rigorous proof, the mixing of the individual arms under \\(\bar{\pi}^\*\\) and the expansion of the set of arms following \\(\bar{\pi}^\*\\) happen simultaneously and continuously. 
-To make an analogy, imagine a **glacier melting from the bottom and gradually reducing to the sea level**; the part of glacier that begins to melt correspond to the arms that starts to follow \\(\bar{\pi}^\*\\), whereas the part already melt correspond to arms that have mixed to the the uniform distribution. 
-To track these two simultaneous changes and account for the occasional stochasticity that disrupt the convergence, we invent a technique called **bivariate Lyapunov function**. We refer the readers to Section 5 of [our paper](https://arxiv.org/abs/2402.05689) for the details of this technique. 
+To make an analogy, imagine a **glacier melting from the bottom and gradually reducing to the sea level**; the part of the glacier that begins to melt corresponds to the arms that start to follow \\(\bar{\pi}^\*\\), whereas the part that has already melted corresponds to arms that have mixed to the uniform distribution. 
+To track these two simultaneous changes and account for the occasional stochasticity that disrupts the convergence, we invent a technique called **bivariate Lyapunov function**. 
+<span style="color:blue">
+We refer the readers to Section 5 of [our paper](https://arxiv.org/abs/2402.05689) for the details of this technique. 
+</span>
 
 
 <!-- Try to intuitively explain the 4-th order dependency on $\tau$ -->
@@ -389,14 +427,14 @@ To track these two simultaneous changes and account for the occasional stochasti
 # Generalizations {#generalizations}
 The techniques outlined in this paper could generalize beyond the restless bandit setting in multiple ways:
 - We could allow multiple actions per arm. For the Flappy Bird example, this could mean having multiple levels of focus, each with a different success rate, and the total amount of focus that Sakiko could spend at a moment is subject to an upper limit. 
-    - We could even have a more refined model to control the Sakiko's specific movements when playing the game, such as tapping the game screen at a certain rate and pressure; different movements could lead to different outcomes, and require different amount of focus. The total focus at a moment should bounded by a fixed amount.
+    - We could even have a more refined model to control Sakiko's specific movements when playing the game, such as tapping the game screen at a certain rate and pressure; different movements could lead to different outcomes, and require different amounts of focus. The total focus at a moment should be bounded by a fixed amount.
 - We could also have multiple constraints. For the Flappy Bird example, this could mean each action is associated with two different types of costs, such as mental effort and physical effort; the total mental and physical efforts are subject to two separate constraints.
-- We could also allow the arms to be heterogeneous, i.e., having different reward function, transition dynamics, and cost functions for different arms. For the Flappy Bird example, different parallel sessions could have a different success rates under the same actions.
+- We could also allow the arms to be heterogeneous, i.e., having different reward function, transition dynamics, and cost functions for different arms. For the Flappy Bird example, different parallel sessions could have different success rates under the same actions.
 
 The multi-action, multi-constraint generalization of restless bandits is called weakly-coupled Markov Decision Processes (WCMDPs). The policy design for WCMDPs follows a similar idea as described in this blog: first, consider a relaxation that decouples the controls of \\(N\\) arms into separate single-armed problems; second, convert the single-armed solution back to an \\(N\\)-armed policy using ID-based prioritization. 
-The asymptotically optimality can be proved almost verbatim, as the primary argument we use here is just the mixing of Markov chains.
+The \\(O(1/\sqrt{N})\\) suboptimality gap can be proved almost verbatim, as the primary argument we use here is just the mixing of Markov chains.
 
-With heterogeneity, the solution is more complex: for policy design, we need to uniformly shuffle the arms at time \\(0\\) before applying ID policy, in case the low-ID arms happen to be "resource hungry" and cause the high-ID arms to starve. 
-The analysis is complicated by the fact that the empirical state distribution that we plot in Figures 6~8 no longer fully capture the system state, given the heterogeneity of the arms. We refer the readers to our second paper [Projection-based Lyapunov method for fully heterogeneous weakly-coupled MDPs](https://www.arxiv.org/abs/2502.06072) for more details.
+With heterogeneity, the solution is more complex: for policy design, we need to uniformly shuffle the arms at time \\(0\\) before applying ID policy, in case the low-ID arms happen to be "resource-hungry" and cause the high-ID arms to starve. 
+The analysis is complicated by the fact that the empirical state distribution that we plot in Figures 8~10 no longer fully captures the system state, given the heterogeneity of the arms. We refer the readers to our second paper [Projection-based Lyapunov method for fully heterogeneous weakly-coupled MDPs](https://www.arxiv.org/abs/2502.06072) for more details.
 
 <!-- For all these generalization, the core idea of our policy design is the same: first consider a relaxation that decouples the controls of $N$ arms into separate single-armed problems; second, convert the single-armed solution back to an $N$-armed policy using ID-based prioritization. The analysis will also be similar, except that the heterogeneity brings an additional layer of complexity of representing the state space. We refer the readers to our second paper [Projection-based Lyapunov method for fully heterogeneous weakly-coupled MDPs](https://www.arxiv.org/abs/2502.06072) for more details.  -->
