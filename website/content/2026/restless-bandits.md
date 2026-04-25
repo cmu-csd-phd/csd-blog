@@ -1,6 +1,6 @@
 +++
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
-title = "Restless bandits"
+title = "From One Arm to Many: Near-Optimal Restless Bandits Under General Conditions"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
 date = 2026-02-03
 
