@@ -43,6 +43,7 @@ katex_auto_render = true
 
 # Setup things for the "Even" theme we use
 csd_logo = "csd.svg"
+blog_header = "blog-header.jpeg"    # displayed on CSD hall screens when there are no graphics in the post
 even_title = "CSD PhD Blog"
 even_menu = [
     {url = "$BASE_URL/", name = "Home"},
