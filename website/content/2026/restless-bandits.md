@@ -2,7 +2,7 @@
 # The title of your blogpost. No sub-titles are allowed, nor are line-breaks.
 title = "From One Arm to Many: Near-Optimal Restless Bandits Under General Conditions"
 # Date must be written in YYYY-MM-DD format. This should be updated right before the final PR is made.
-date = 2026-02-03
+date = 2026-05-02
 
 [taxonomies]
 # Keep any areas that apply, removing ones that don't. Do not add new areas!
@@ -64,7 +64,7 @@ Here is what Sakiko can do:
 
 Now consider a version of Flappy Bird that consists of infinitely many _episodes_, each with multiple pipes. 
  When the bird reaches the end of an episode, it enters a new episode and receives a unit of score; when the bird hits a pipe, the game restarts from the initial episode, with no score generated. 
-There are two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces), and they can have different numbers of pipes. The first episode after restart is always HARD, whereas each subsequent episode's type is sampled to be HARD or EASY with equal probability each time the bird enters it<span style="color:blue"> — so for example, an EASY episode can be followed by a HARD one, while a failure always resets the bird to a HARD episode</span>. The setting is illustrated in Figure 3 below.
+There are two types of episodes, HARD (with narrow spaces) or EASY (with wide spaces), and they can have different numbers of pipes. The first episode after restart is always HARD, whereas each subsequent episode's type is sampled to be HARD or EASY with equal probability each time the bird enters it — so for example, an EASY episode can be followed by a HARD one, while a failure always resets the bird to a HARD episode. The setting is illustrated in Figure 3 below.
 
 <figure id="fig:episode" style="text-align: center;">
 <img src="./episode-explained.png" alt="Diagram showing three consecutive Flappy Bird episodes separated by Score +1 markers. Episode 1 is labeled 'HARD episode'; Episodes 2 and 3 are labeled 'Random types with equal probabilities'. An orange bird is shown flying rightward through green pipe obstacles in Episode 1." style="max-height: 30vh; width: auto;"/> 
@@ -95,7 +95,7 @@ The rules of the Flappy-Bird-Octopus problem are concretely summarized as follow
 </figure>
 
 
-<span style="color:blue">
+
 Naively, Sakiko could focus on a fixed set of \\(\alpha N\\) sessions throughout the game, but a smarter strategy is to allocate her focus adaptively --- only focusing on the sessions that actually need it, i.e., those currently in a HARD episode. But this still leaves a non-trivial decision: when more than \\(\alpha N\\) sessions are in HARD episodes, which ones should she focus on? Depending on each session's progress within its current episode, different rules can lead to dramatically different outcomes.
 
 <a href='#fig:random-tb-preview'>Figure 5</a> and <a href='#fig:id-policy-preview'>Figure 6</a> below illustrate two such rules through simulations with \\(N = 500\\) sessions.
@@ -119,7 +119,6 @@ In Figure 6, Sakiko instead breaks ties by a fixed ordering of the sessions, alw
 
 Below, we introduce a mathematical framework that lets us reason about such design choices formally, and the resulting techniques generalize to problems well beyond Flappy Bird.
 
-</span>
 
 
 
@@ -229,13 +228,13 @@ where \\(R\_N^\* \triangleq \sup_{\pi} R\_N^\pi\\) denotes the optimal long-run 
 
 <!-- **A**: As mentioned in the last section, the state space of the problem grows exponentially with the number of arms, \\(N\\), so we definitely do not want to start with a fully general policy class. Restricting to a smaller policy class is necessary.  -->
 
-<span style="color:blue">
+
 
 ## Single-armed policy
 
 While the full \\(N\\)-armed problem is hard, a single arm in isolation is much more tractable. As a first step, we formulate and solve a suitable single-armed problem, whose optimal policy will later guide the design of an \\(N\\)-armed policy. 
 
-</span>
+
 
 **Q**: Suppose we want to optimize the reward of a single arm, without any constraints. Can we find an optimal policy efficiently?
 
@@ -281,10 +280,9 @@ For other \\(\alpha\\) or more general problems, the single-armed problem under 
 
 
 ## From a single-armed policy to an \\(N\\)-armed policy
-<span style="color:blue">
+
 Each arm of the restless bandit shares the same MDP structure, so \\(\bar{\pi}^\*\\) can in principle be applied to every arm independently. Before discussing whether this is feasible, let us first explain why we would want to.
 
-</span>
 
 Notice that
 <span id="eq:upper-bound"></span>
@@ -331,17 +329,13 @@ For the ease of presentation, we let the number of states in a HARD episode be \
 
 ## Tie-Breaking Rule: a Naive Attempt
 
-<span style="color:blue">
 
 It is tempting to break ties uniformly at random. However, as we already saw in the motivation section, this does not work. 
 
-</span>
 
 As shown in <a href='#fig:random-tb'>Figure 10</a> below, under uniformly random tie-breaking, most arms are stuck in states \\(\\{1,2,3,4\\}\\), so most birds keep hitting the pipes and fail to pass any episode. Quantitatively, the average reward after simulating \\(10^4\\) time steps is only \\(0.0058\\), much smaller than the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
 
-<span style="color:blue">
-Let us look more closely at why this happens.
-</span>
+Let us look more closely at why this happens. 
 When all arms are initialized in states \\(\\{1,2,3,4\\}\\), they all require persistent focus to pass the HARD episode and reach the rest of the state space. However, under the random tie-breaking rule, each arm is activated with probability \\(\alpha = 0.16\\), and fails with probability \\((1-\alpha)\*p = 0.756\\). Consequently, most arms cannot succeed \\(4\\) times in a row and will keep falling back to state \\(1\\).
 
 <!-- **Q**: What about a smarter tie-breaking rule, such as prioritizing arms that are closest to completing the HARD episode (i.e., arms in higher-numbered states within \\(\\{1,2,3,4\\}\\))? This resembles the classical Shortest-Job-First (SJF) scheduling heuristic.
@@ -371,15 +365,12 @@ The key limiting assumption behind the optimality proofs for index / priority po
 ## Key Idea: Enforcing Persistency via the ID Policy
 **Q**: As discussed above, the random tie-breaking rule fails because it lacks persistency. What would be a natural tie-breaking rule that encodes persistency?
 
-**A**: Consider the following simple tie-breaking rule: we always prioritize arm \\(i\\) over arm \\(j\\) to follow \\(\bar{\pi}^\*\\) for any \\(1\leq i < j \leq N\\). We call the resulting \\(\bar{\pi}^\*\\)-guided policy the _ID policy_, as it breaks ties using the IDs (\\(i\\) and \\(j\\)) of the arms. <span style="color:blue">This is precisely the fixed-ordering rule we previewed in the motivation section. Intuitively, under the ID policy, 
-</span>
+**A**: Consider the following simple tie-breaking rule: we always prioritize arm \\(i\\) over arm \\(j\\) to follow \\(\bar{\pi}^\*\\) for any \\(1\leq i < j \leq N\\). We call the resulting \\(\bar{\pi}^\*\\)-guided policy the _ID policy_, as it breaks ties using the IDs (\\(i\\) and \\(j\\)) of the arms. This is precisely the fixed-ordering rule we previewed in the motivation section. Intuitively, under the ID policy, 
 arms with small IDs are likely to keep receiving a high priority and could follow \\(\bar{\pi}^\*\\) for a long time.
 
 Translating to the Flappy Bird example, the ID policy simply looks at all arms in states \\(1,2,3,4\\) (HARD episodes); when there are more than \\(\alpha N\\) such arms, the policy focuses on \\(\alpha N\\) of them with the smallest IDs. 
 
-<span style="color:blue">
 This approach turns out to work. 
-</span> 
 As shown in <a href='#fig:id-policy'>Figure 11</a> below, the state distribution of the arms gradually converges to the uniform distribution, after which most arms continuously pass the episodes without triggering many failure events. Quantitatively, the average reward is about \\(0.0774\\) after simulating \\(10^4\\) time steps, close to the upper bound \\(R\_1^{\bar{\pi}^\*} = 0.08\\).
 
 
