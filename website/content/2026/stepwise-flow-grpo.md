@@ -14,8 +14,7 @@ committee = [
     {name = "Committee Member 3's Full Name", url = "Committee Member 3's page"}
 ]
 +++
-
-Flow matching models like Stable Diffusion 3.5 generate an image by iteratively denoising random noise over many small steps. When we want to fine-tune these models with reinforcement learning, say to make them follow text prompts more faithfully or produce more aesthetic outputs, a natural question arises: which steps deserve credit, or blame, for the final result?
+Flow matching models like Stable Diffusion 3.5 and FLUX generate an image by iteratively denoising random noise over many small steps. When we want to fine-tune these models with reinforcement learning, say to make them follow text prompts more faithfully or produce more aesthetic outputs, a natural question arises: which steps deserve credit, or blame, for the final result?
 
 The current state of the art, [Flow-GRPO](https://arxiv.org/abs/2505.05470), sidesteps this question. Every denoising step gets the same credit, computed from the reward on the final image. If the image is good, every step is reinforced equally. If it is bad, every step is penalized. This is a tempting simplification, but it ignores something important about how diffusion generation actually works. Different steps do fundamentally different things, and treating them identically wastes most of the available learning signal.
 
@@ -24,38 +23,69 @@ This blog post describes our recent work, [_Stepwise Credit Assignment for GRPO 
 ## TL; DR
 
 - **Problem.** Flow-GRPO assigns the same advantage to every denoising step in a trajectory, ignoring that early steps determine composition while late steps refine details. A trajectory with bad early decisions that get corrected later is reinforced just as strongly as one with good decisions throughout.
-- **Stepwise rewards via Tweedie.** We score every denoising step by applying the reward model to a one-step (or few-step) Tweedie estimate \\(\hat{x}\_{0}(t) = \mathbb{E}[x\_{0} \mid x\_{t}]\\) of the clean image. This is essentially free since \\(\hat{x}\_{0}(t)\\) reuses the predicted noise that the flow model already computes.
+- **Stepwise rewards via Tweedie.** We score every denoising step by applying the reward model to a few-step Tweedie estimate \\(\hat{x}\_{0}(t) = \mathbb{E}[x\_{0} \mid x\_{t}]\\) of the clean image. This is essentially free since \\(\hat{x}\_{0}(t)\\) reuses the predicted noise that the flow model already computes at every step.
 - **Stepwise gains, not raw rewards.** We optimize the per-step gain \\(g\_{t} = r\_{t-1} - r\_{t}\\). The gains telescope to the total reward improvement, so we get fine-grained credit assignment without changing the global objective.
-- **Improved SDE.** Flow-GRPO's SDE injects enough noise that intermediate samples confuse the reward model. We replace it with a DDIM-inspired alternative that exactly preserves the marginal variance of rectified flow while still allowing exploration.
-- **Results.** Stepwise-Flow-GRPO converges faster than Flow-GRPO on PickScore, ImageReward, and UnifiedReward, in both training iterations and wall-clock time. It trains stably where Flow-GRPO diverges (UnifiedReward, OCR rendering). After 400 GPU hours, it reaches **0.87 on GenEval**, beating GPT-4o (0.84).
+- **Improved SDE.** Flow-GRPO's SDE inadvertently injects extra noise at every step, leaving final samples noisy and degrading the reward signal. We replace it with a DDIM-inspired alternative that does not add unintended noise and recovers the flow ODE in the appropriate limits.
+- **Results.** **Stepwise-Flow-GRPO has better sample efficiency than Flow-GRPO**, in both training iterations and wall-clock time, across three reward models (PickScore, ImageReward, UnifiedReward) on two datasets. The improved SDE accelerates *both* methods, and combining the two changes gives the best results overall. Stepwise-Flow-GRPO also trains stably where Flow-GRPO diverges, including on the 7B UnifiedReward VLM and on OCR text rendering.
 
 ![Two trajectories from the same prompt have similar final rewards but very different intermediate behavior. Trajectory 0 dips at t=0.86 before recovering, and trajectory 1 drops sharply at t=0.71. Uniform credit assignment treats them identically.](./figure1-motivation.png)
 
-**Figure 1.** Two denoising trajectories from the same prompt reach roughly the same final reward (about 0.90), but they take very different paths. One has a clean monotone improvement; the other dips badly midway and recovers later. Flow-GRPO's uniform credit assignment cannot tell them apart. Stepwise-Flow-GRPO can, and uses that distinction to learn faster.
+**Figure 1.** Two denoising trajectories from the same prompt reach roughly the same final reward (about 0.90), but they take very different paths. Trajectory 0 dips at \\(t=0.86\\) before recovering; trajectory 1 drops sharply at \\(t=0.71\\). Flow-GRPO's uniform credit assignment cannot tell them apart. Stepwise-Flow-GRPO can, and uses that distinction to learn faster.
 
 ## Background
 
-I will set up just enough background to make the rest of the post self-contained.
+I will set up just enough background to make the rest of the post self-contained. Readers familiar with flow matching and GRPO can safely skip ahead.
 
 ### Flow Matching
 
-[Rectified flow](https://arxiv.org/abs/2209.03003) is a recent reframing of diffusion models that has become standard in state-of-the-art image generators. Given a clean data sample \\(x\_{0}\\) and noise \\(x\_{1} \sim \mathcal{N}(0, I)\\), it defines the linear interpolant \\(x\_{t} = (1-t)x\_{0} + tx\_{1}\\) for \\(t \in [0, 1]\\). A neural network \\(v\_{\theta}\\) is trained to predict the velocity \\(\dot{x}\_{t} = x\_{1} - x\_{0}\\) of this interpolant. To generate, we start at pure noise (\\(t=1\\)) and integrate the learned ODE \\(dx\_{t} = v\_{\theta}(x\_{t}, t, c) dt\\) backward to \\(t=0\\), yielding a clean image conditioned on prompt \\(c\\).
+Flow matching is a recent reframing of diffusion modeling that has become the dominant approach in state-of-the-art image generators, including Stable Diffusion 3 / 3.5 and the FLUX family. The version we use, [rectified flow](https://arxiv.org/abs/2209.03003), is built around a simple linear interpolant. Given a clean data sample \\(x\_{0} \sim p\_{\text{data}}\\) and Gaussian noise \\(x\_{1} \sim \mathcal{N}(0, I)\\), define
 
-This deterministic ODE works well for inference, but RL needs stochasticity. We need different samples to compare. The standard trick is to convert the ODE into an SDE that has the same time marginals (a consequence of the Fokker-Planck equation). After Euler-Maruyama discretization, each step samples from a Gaussian:
+\\[ x\_{t} = (1-t) x\_{0} + t x\_{1}, \qquad t \in [0, 1] \\]
+
+so that \\(x\_{0}\\) is a clean image, \\(x\_{1}\\) is pure noise, and \\(x\_{t}\\) smoothly interpolates between them. The model \\(v\_{\theta}(x\_{t}, t, c)\\) is trained to predict the velocity \\(\dot{x}\_{t} = x\_{1} - x\_{0}\\) of this interpolant at time \\(t\\), conditioned on a prompt \\(c\\):
+
+\\[ \mathcal{L}(\theta) = \mathbb{E}\_{t, x\_{0}, x\_{1}} \left[ \lVert (x\_{1} - x\_{0}) - v\_{\theta}(x\_{t}, t, c) \rVert^{2} \right] \\]
+
+To generate an image, we start from pure noise \\(x\_{1} \sim \mathcal{N}(0, I)\\) at \\(t=1\\) and integrate the learned ODE \\(dx\_{t} = v\_{\theta}(x\_{t}, t, c) dt\\) backward to \\(t=0\\). In practice we discretize this integration into \\(T\\) steps (the *denoising steps* I will refer to throughout).
+
+### Converting the ODE to an SDE for RL
+
+The deterministic ODE works fine for inference, but it is not suitable for reinforcement learning. RL needs to explore: from the same prompt and same initial noise, we need the model to produce *different* trajectories that we can reward differently and compare against each other. A deterministic process produces one trajectory per starting point, so there is nothing to compare.
+
+Following [Flow-GRPO](https://arxiv.org/abs/2505.05470), we replace the deterministic ODE with a stochastic differential equation (SDE) that injects a small amount of noise at each step. The SDE is carefully constructed so that, at every time \\(t\\), its distribution over \\(x\_{t}\\) matches the original ODE. This *marginal-preserving* property is important: it means that optimizing the SDE policy also improves the deterministic ODE we use at inference. After discretization, each denoising step becomes a draw from a Gaussian:
 
 \\[ \pi\_{\theta}(x\_{t-\Delta t} \mid x\_{t}, c) = \mathcal{N}(x\_{t-\Delta t};\ \mu\_{t},\ \sigma\_{t}^{2} \Delta t \cdot I) \\]
 
-Now we have a stochastic policy we can optimize.
+where the mean \\(\mu\_{t}\\) is determined by the velocity prediction \\(v\_{\theta}\\) and \\(\sigma\_{t}\\) is a noise schedule we choose. Now we have a *stochastic policy* \\(\pi\_{\theta}\\) that we can optimize: each rollout of the sampler produces a different trajectory \\((x\_{T}, x\_{T-1}, \ldots, x\_{0})\\) ending in a different final image.
 
 ### GRPO
 
-[GRPO](https://arxiv.org/abs/2402.03300) is the policy optimization algorithm popularized by [DeepSeek-R1](https://arxiv.org/abs/2501.12948). It is appealingly simple: for each prompt \\(c\\), sample \\(N\\) trajectories, compute each one's reward, and standardize within the group:
+[GRPO](https://arxiv.org/abs/2402.03300) is the policy optimization algorithm introduced in DeepSeekMath (Shao et al., 2024) and later popularized by [DeepSeek-R1](https://arxiv.org/abs/2501.12948). It is appealingly simple, and crucially it avoids needing a learned critic network (more on that below).
 
-\\[ A^i = \frac{r^i - \mathrm{mean}}{\mathrm{std}} \\]
+For each prompt \\(c\\), we sample \\(N\\) trajectories from the current policy and compute each one's reward \\(r^{i}\\) for \\(i = 1, \ldots, N\\). We then standardize the rewards within this group of \\(N\\):
 
-This group-relative advantage gets multiplied by a clipped propensity ratio and combined with a KL penalty against a reference policy, in the standard PPO style. The key feature is that there is no critic network and no value function, just relative comparisons within a group.
+\\[ A^{i} = \frac{r^{i} - \mu}{\sigma}, \qquad \mu = \frac{1}{N} \sum\_{j=1}^{N} r^{j}, \qquad \sigma = \sqrt{\frac{1}{N} \sum\_{j=1}^{N} (r^{j} - \mu)^{2}} \\]
 
-[Flow-GRPO](https://arxiv.org/abs/2505.05470) applies GRPO to flow matching by computing one reward per trajectory, on the final image, and propagating that single advantage \\(A^i\\) to every denoising step \\(t = 0, \dots, T-1\\). Every step in trajectory \\(i\\) sees the same advantage. This is the design choice we challenge.
+The standardized reward \\(A^{i}\\), called the *group-relative advantage*, measures how much better trajectory \\(i\\) performed than the average trajectory in its group, in units of standard deviations. Trajectories better than average get \\(A^{i} > 0\\); worse than average get \\(A^{i} < 0\\).
+
+We then update the policy by gradient ascent on a clipped surrogate objective. For each step \\(t\\) of trajectory \\(i\\), we compute the *propensity ratio*
+
+\\[ \rho\_{t}^{i}(\theta) = \frac{\pi\_{\theta}(x\_{t}^{i} \mid x\_{t+1}^{i}, c)}{\pi\_{\text{old}}(x\_{t}^{i} \mid x\_{t+1}^{i}, c)} \\]
+
+which is how much more (or less) likely the *current* policy \\(\pi\_{\theta}\\) is to take the action that the *sampling* policy \\(\pi\_{\text{old}}\\) actually took. The objective is
+
+\\[ J(\theta) = \frac{1}{NT} \sum\_{i=1}^{N} \sum\_{t=0}^{T-1} \left[ \min\left(\rho\_{t}^{i} A^{i},\ \mathrm{clip}(\rho\_{t}^{i}, 1-\varepsilon, 1+\varepsilon)\ A^{i}\right) - \beta\ \mathrm{KL}(\pi\_{\theta} \mid\mid \pi\_{\text{ref}}) \right] \\]
+
+The two stabilization mechanisms are:
+
+- **Ratio clipping.** If the current policy diverges too much from the sampling policy (\\(|\rho - 1| > \varepsilon\\)), the clipped term pins the gradient and prevents destructively large updates. This is the standard [PPO](https://arxiv.org/abs/1707.06347) trick.
+- **KL regularization.** The KL penalty pulls the policy toward a fixed *reference policy* \\(\pi\_{\text{ref}}\\), typically the pretrained model before RL fine-tuning. This anchors the model so it does not lose its general capabilities while adapting to the reward.
+
+What GRPO is missing compared to [PPO](https://arxiv.org/abs/1707.06347) is a learned critic. In PPO, the advantage is computed by subtracting a learned value function from the reward. GRPO replaces that learned baseline with the much simpler group mean \\(\mu\\) above, avoiding a secondary learning problem. The cost is that the advantage is now a single scalar per trajectory, with no fine-grained information about which steps within the trajectory contributed to the reward.
+
+### Flow-GRPO
+
+Flow-GRPO applies GRPO to flow matching by sampling \\(N\\) trajectories from the SDE policy for each prompt \\(c\\), computing the reward on each final image \\(r^{i} = R(x\_{0}^{i}, c)\\), and propagating that single advantage \\(A^{i}\\) to every denoising step in the trajectory. Every step \\(t \in \{0, 1, \ldots, T-1\}\\) in trajectory \\(i\\) sees the same \\(A^{i}\\). This is the design choice we challenge.
 
 ## Why Uniform Credit Assignment is Wasteful
 
