@@ -78,10 +78,10 @@ which is how much more (or less) likely the *current* policy \\(\pi\_{\theta}\\)
 
 The two stabilization mechanisms are:
 
-- **Ratio clipping.** If the current policy diverges too much from the sampling policy (\\(|\rho - 1| > \varepsilon\\)), the clipped term pins the gradient and prevents destructively large updates. This is the standard [PPO](https://arxiv.org/abs/1707.06347) trick.
+- **Ratio clipping.** If the current policy diverges too much from the sampling policy (\\(|\rho - 1| > \varepsilon\\)), the clipped term pins the gradient and prevents destructively large updates.
 - **KL regularization.** The KL penalty pulls the policy toward a fixed *reference policy* \\(\pi\_{\text{ref}}\\), typically the pretrained model before RL fine-tuning. This anchors the model so it does not lose its general capabilities while adapting to the reward.
 
-What GRPO is missing compared to [PPO](https://arxiv.org/abs/1707.06347) is a learned critic. In PPO, the advantage is computed by subtracting a learned value function from the reward. GRPO replaces that learned baseline with the much simpler group mean \\(\mu\\) above, avoiding a secondary learning problem. The cost is that the advantage is now a single scalar per trajectory, with no fine-grained information about which steps within the trajectory contributed to the reward.
+Notably, GRPO uses no learned critic or value function. The group mean \\(\mu\\) plays the role of a baseline, computed from a small batch of rollouts rather than fit by a separate network. This makes GRPO simple to implement, but it means each trajectory gets a single scalar advantage \\(A^{i}\\), with no fine-grained information about which steps within the trajectory contributed to the reward.
 
 ### Flow-GRPO
 
@@ -89,43 +89,41 @@ Flow-GRPO applies GRPO to flow matching by sampling \\(N\\) trajectories from th
 
 ## Why Uniform Credit Assignment is Wasteful
 
-Flow-GRPO's uniform credit assignment fails for two related reasons.
+Flow-GRPO works. It just leaves performance on the table, for two related reasons.
 
-**Problem 1: Diffusion has a temporal hierarchy.** Different denoising steps contribute fundamentally different information to the final image, and we can see this from a quick frequency-domain analysis. Natural images concentrate energy at low frequencies (their power spectra fall off as \\(|k|^{-\alpha}\\)), while Gaussian noise is flat across frequencies. The signal-to-noise ratio at frequency \\(k\\) and time \\(t\\) is therefore
+**Problem 1: Diffusion has a temporal hierarchy.** Different denoising steps do qualitatively different work. Early steps (when \\(t\\) is close to 1 and most of the signal is still noise) establish coarse structure: object layout, composition, color blocking. Late steps (when \\(t\\) is close to 0 and the image is nearly clean) refine high-frequency details: textures, sharp edges, fine geometry. This coarse-to-fine progression is a well-known property of diffusion generation, and the [paper](https://stepwiseflowgrpo.com) walks through a quick frequency-domain derivation. Uniform credit assignment ignores this structure, treating all denoising steps equally regardless of which role they play.
 
-\\[ \mathrm{SNR}\_{t}(k) = \left(\frac{1-t}{t}\right)^{2} \frac{1}{|k|^{\alpha}} \\]
-
-The \\(1/|k|^\alpha\\) factor means low frequencies always have higher SNR than high frequencies. As denoising proceeds (\\(t \to 0\\)), the global \\(((1-t)/t)^2\\) prefactor grows, progressively lifting higher frequencies above the noise floor. The result is a coarse-to-fine generation order. At \\(t \approx 1\\), only low-frequency information is recoverable, so early steps determine layout and composition. Fine details emerge only near \\(t = 0\\). Rewarding both phases equally is like grading an essay's outline and its punctuation on the same rubric.
-
-**Problem 2: Mistakes get rewarded if they get corrected.** Imagine a trajectory where the model commits to the wrong color at \\(t \approx 1\\) (say, magenta instead of orange), but later steps drift back to correct it. The final image looks fine, so Flow-GRPO reinforces every step in the trajectory, including the bad early decision. We want to penalize that early mistake, not bake it in.
-
-Figure 1 above shows both problems empirically. Two trajectories with the same prompt reach similar final rewards, but they take very different routes. Uniform credit assignment is blind to this. The structure is exactly the kind of signal a smarter credit assignment scheme could exploit.
+**Problem 2: The final image hides what happened along the way.** Only rewarding the final image may unintentionally reinforce early steps that made mistakes which got corrected later in the trajectory. Figure 1 above shows some of this non-monotonic variability across trajectories.
 
 ## Stepwise-Flow-GRPO
 
-The plan is straightforward. Instead of one reward per trajectory, compute a reward at every step, and credit each step based on its *gain* over the previous step. The challenge is doing this without (1) running an expensive reward model on noisy intermediate states, and (2) introducing optimization pathologies that subvert the final objective.
+The plan is straightforward. Instead of one reward per trajectory, compute a reward at every step, and credit each step based on its *improvement* (or *gain*) over the previous step. Two challenges to address: (1) reward models are trained on clean images, so they do not give meaningful scores on the noisy intermediate states \\(x\_{t}\\) that come up mid-trajectory; and (2) we need to be careful that introducing per-step rewards does not push the model away from the *final-image* objective we actually care about.
 
 ### Estimating Intermediate Rewards via Tweedie's Formula
 
-Reward models are trained on clean images. We cannot just feed them noisy intermediate states \\(x\_{t}\\); the result would be garbage. But Tweedie's formula gives us a posterior-mean estimate of the clean image:
+We address challenge (1) using Tweedie's formula, which gives us a posterior-mean estimate of the clean image from the noisy state:
 
 \\[ \hat{x}\_{0}(t) := \mathbb{E}[x\_{0} \mid x\_{t}] = x\_{t} - t \hat{x}\_{1} \\]
 
-where \\(\hat{x}\_{1}\\) is the predicted noise, already computed at every step during sampling. So a one-step Tweedie estimate is essentially **free**: it reuses computation we are already doing. In practice, we get sharper estimates by running a few extra ODE substeps from \\(x\_{t}\\) toward \\(x\_{0}\\). We use \\(T' = 5\\) substeps, which empirically gives strong reward signal at modest cost. An ablation in the paper shows the method is robust to this choice. Each Tweedie estimate is then scored by the reward model: \\(r\_{t}^{i} = R(\hat{x}\_{0}^{i}(t), c)\\).
+where \\(\hat{x}\_{1}\\) is the predicted noise, already computed at every step during sampling. We score the Tweedie estimate instead of \\(x\_{t}\\) itself: \\(r\_{t}^{i} = R(\hat{x}\_{0}^{i}(t), c)\\). The one-step Tweedie estimate is essentially **free** since it reuses computation we are already doing.
 
-Because the denoising from each \\(x\_{t}^{i}\\) is independent, all \\(T\\) reward estimates for a trajectory can be computed in parallel, which keeps the wall-clock overhead manageable.
+The one-step estimate is not always sharp, though, especially when \\(t\\) is far from 0 and \\(x\_{t}\\) is still mostly noise. We get a sharper estimate by taking \\(x\_{t}\\) and running it forward through the flow ODE for a few extra steps toward \\(t = 0\\), producing a cleaner image to feed to the reward model. The number of extra ODE substeps \\(T'\\) trades off estimate quality against compute. We use \\(T' = 5\\), which the paper's ablations show gives a strong reward signal without much overhead; the method is robust to this choice across a wide range.
+
+Because the denoising and rewarding from each \\(x\_{t}^{i}\\) is independent, all \\(T\\) reward estimates for a trajectory can be computed in parallel, which keeps the wall-clock overhead manageable.
 
 ### Gains, Not Raw Rewards
 
-If we directly optimized intermediate rewards \\(r\_{t}^{i}\\), we would push the model toward producing high-scoring *Tweedie estimates* rather than high-scoring final images. That is the wrong objective. The fix is to optimize the **gain**:
+The more natural GRPO extension would be to compute per-step advantages directly from the intermediate rewards \(r_{t}^{i}\), standardizing them within the group just as Flow-GRPO standardizes the final reward. But this is the wrong objective: it tells the model to make Tweedie estimates score well at every point along the trajectory, even very early on. A Tweedie estimate from a noisy mid-trajectory state is a blurry guess at the final image, not the final image itself. Pushing it to score highly distorts the denoising dynamics and pulls the model away from producing high-quality final outputs, which is what we actually care about.
+
+The fix is to credit each step by its *gain*, the improvement it produces over the previous step:
 
 \\[ g\_{t}^{i} := r\_{t-1}^{i} - r\_{t}^{i} \\]
 
-i.e., the reward improvement from one step to the next. The crucial property is that gains telescope:
+The crucial property is that gains telescope:
 
 \\[ \sum\_{t=1}^{T} g\_{t}^{i} = r\_{0}^{i} - r\_{T}^{i} \\]
 
-Maximizing the sum of gains is equivalent to maximizing the improvement from initial noise to final image. Since all \\(N\\) trajectories in a group share the same initial noise \\(x\_{T}\\), the term \\(r\_{T}^{i}\\) is constant within a group, and the *group-relative* sum of gains equals the *group-relative* final reward. We get local credit assignment for free without sacrificing the global objective.
+So summing per-step gains across the trajectory recovers the total improvement from initial noise \\(x\_{T}\\) to final image \\(x\_{0}\\). And because all \\(N\\) trajectories in a group share the same initial noise \\(x\_{T}\\), the term \\(r\_{T}^{i}\\) is identical across the group. After group-relative normalization (subtracting the mean over the group), this shared constant drops out, leaving us optimizing exactly the group-relative final reward, the same thing Flow-GRPO optimizes. The difference is that we now have per-step credit along the way, without changing the global objective.
 
 ![Mean absolute gain per denoising step, measured on 256 GenEval prompts using PickScore. Gains are largest near t=1 and shrink as t approaches 0.](./figure2-gain-magnitudes.png)
 
@@ -137,7 +135,11 @@ We compute group-relative advantages, but we normalize *jointly* across all step
 
 \\[ \tilde{A}\_{t}^{i} = \frac{g\_{t}^{i} - \mu\_{\text{global}}}{\sigma\_{\text{global}}} \\]
 
-Why joint rather than per-step? Per-step normalization would inflate noise in late steps where reward changes are small, washing out the signal where it is meaningful. Joint normalization preserves the natural temporal structure: early gains are bigger, so they get bigger advantages, exactly as we want. An ablation in the paper confirms that joint normalization converges substantially faster.
+where, unlike the background GRPO definition that averaged only over the \\(N\\) trajectories, \\(\mu\_{\text{global}}\\) and \\(\sigma\_{\text{global}}\\) are computed over the \\(NT\\) pairs \\((i, t)\\), i.e., across both trajectories and timesteps:
+
+\\[ \mu\_{\text{global}} = \frac{1}{NT} \sum\_{i=1}^{N} \sum\_{t=1}^{T} g\_{t}^{i}, \qquad \sigma\_{\text{global}} = \sqrt{\frac{1}{NT} \sum\_{i=1}^{N} \sum\_{t=1}^{T} (g\_{t}^{i} - \mu\_{\text{global}})^{2}} \\]
+
+Why joint rather than per-step? Per-step normalization would inflate noise in late steps where reward changes are small, washing out the signal where it is meaningful. Joint normalization preserves the natural temporal structure: early gains are bigger (Figure 2), so they get bigger advantages, exactly as we want. An ablation in the paper confirms that joint normalization converges substantially faster.
 
 ### Pseudocode
 
@@ -145,6 +147,7 @@ The algorithm is essentially Flow-GRPO with the gain computation and joint norma
 
 ```python
 # All N trajectories in a group share the same initial noise x_T
+x_T ~ N(0, I)
 for i in range(N):
     x[i, T] = x_T
     for t in range(T-1, -1, -1):
@@ -165,39 +168,57 @@ optimize(theta, A_tilde, propensity_ratio, KL_penalty)
 
 That is the entire method. The change from Flow-GRPO is small in code and large in effect.
 
-### Connection to Adaptive Submodular Optimization
-
-There is a clean theoretical motivation for greedy gain maximization. Recent work by [Kveton et al. (2025)](https://rlj.cs.umass.edu/2025/papers/RLJ_RLC_2025_193.html) showed that KL-regularized policy gradients on per-step gains learn near-optimal policies when reward gains are *monotone and submodular*, an analog of classic guarantees for greedy submodular maximization. In a simplified on-policy variant of our method (where the propensity ratio is 1 and advantages are replaced by raw gains), the objective reduces algebraically to theirs.
-
-Our setting generalizes Kveton et al. to off-policy GRPO with group-relative advantages, and is the first application of adaptive gain maximization to flow models. We do not formally verify submodularity for the reward functions we use, but the diminishing gains in Figure 2 are consistent with submodular-like structure, and the empirical results suggest the analogy is doing real work.
+As a side note, the gain formulation also has theoretical grounding in adaptive submodular optimization. [Kveton et al. (2025)](https://rlj.cs.umass.edu/2025/papers/RLJ_RLC_2025_193.html) showed that KL-regularized policy gradients on per-step gains learn near-optimal policies under a monotone-submodular assumption on the reward, and the on-policy version of our objective reduces algebraically to theirs. We do not verify submodularity for the reward functions we use, but the diminishing gains in Figure 2 are at least consistent with that kind of structure. See the [paper](https://stepwiseflowgrpo.com) for details.
 
 ## An Improved SDE: A Complementary Fix
 
-There is a separate issue with Flow-GRPO that we noticed while developing stepwise credit assignment. Flow-GRPO's SDE injects enough noise that intermediate samples become visibly degraded compared to the deterministic ODE. Since reward models are trained on clean images, this degrades the reward signal regardless of the credit assignment scheme. So we replaced Flow-GRPO's SDE with a [DDIM](https://arxiv.org/abs/2010.02502)-inspired alternative.
+There is a separate issue with Flow-GRPO that we noticed while developing stepwise credit assignment. The final images produced by Flow-GRPO's SDE are visibly noisier than those produced by the deterministic flow ODE, especially when sampling with fewer denoising steps. This is somewhat surprising at first glance, because the Flow-GRPO SDE provably matches the marginals of the flow ODE. The catch is that marginal matching is a constraint on the distribution of \\(x\_{t}\\) at each timestep, not on how each individual sampling step is parameterized. Many SDEs satisfy the marginal constraint, and Flow-GRPO's particular one introduces more per-step noise than necessary. Since reward models are trained on clean images, this degrades the reward signal regardless of the credit assignment scheme. So we replaced Flow-GRPO's SDE with a [DDIM](https://arxiv.org/abs/2010.02502)-inspired alternative.
 
 The new update rule interpolates between deterministic and stochastic sampling:
 
-\\[ x\_{t-\Delta t} = (1 - (t-\Delta t)) \hat{x}\_{0}(t) + \sqrt{(t-\Delta t)^{2} - \sigma\_{t}^{2}} \\, \hat{x}\_{1} + \sigma\_{t} \epsilon \\]
+\\[ x\_{t-\Delta t} = (1 - (t-\Delta t)) \hat{x}\_{0}(t) + \sqrt{(t-\Delta t)^{2} - \sigma\_{t}^{2}} \, \hat{x}\_{1} + \sigma\_{t} \epsilon \\]
 
-When \\(\sigma\_{t} = 0\\), this recovers the deterministic ODE exactly. For small \\(\sigma\_{t}\\), it approximately matches the original flow marginals (the noise coefficient differs by \\(O(\sigma\_{t}^{4})\\)). Crucially, this formulation has *exact* variance preservation, while Flow-GRPO's SDE inflates marginal variance. The cumulative effect of that inflation is the noisy intermediate samples we observed.
+This formulation is designed around two properties. First, setting \\(\sigma\_{t} = 0\\) zeroes out the noise term and recovers the deterministic flow ODE exactly, so we can dial in the amount of stochasticity we want for RL training. Second, the noise injected at each step is calibrated to match the noise level that rectified flow assigns to that timestep, so intermediate samples stay on the trajectory the model was trained to denoise rather than drifting off it.
 
-![Qualitative comparison of intermediate samples. Flow-GRPO's SDE produces visibly noisy images, while our DDIM-inspired SDE produces clean images while still injecting enough stochasticity for policy gradients.](./figure8-improved-sde.png)
+There is a tradeoff. Marginal matching to the flow ODE (the property that Flow-GRPO's SDE achieves exactly) only holds for our SDE in the Taylor limit of small \\(\sigma\_{t}\\). For the small \\(\sigma\_{t}\\) we use in practice, the approximation is tight enough that optimizing the SDE still improves the ODE we use at inference. The paper has the precise statements.
 
-**Figure 3.** Flow-GRPO's SDE produces visibly noisy intermediate samples (middle column). Our DDIM-inspired SDE (right column) produces clean images while still injecting enough stochasticity for policy gradients.
+![Qualitative comparison of final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results, while our DDIM-inspired SDE produces clean images while still injecting enough stochasticity for policy gradients.](./figure8-improved-sde.png)
 
-We use a noise schedule \\(\sigma\_{t} = \eta(t-\Delta t) \sqrt{1-t}\\). The schedule reduces exploration near the clean-image endpoint, and (via a tangent-flow analysis) compensates for the higher influence of early-step perturbations on the final image. Empirically, this makes the per-step exploration budget roughly uniform across the trajectory.
+**Figure 3.** Final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results (middle column); our DDIM-inspired SDE produces clean images (right column) while still injecting enough stochasticity for policy gradients.
 
-The two contributions, stepwise credit assignment and the improved SDE, are *complementary*. Each helps on its own, and combining them does better than either alone.
+We pick a noise schedule that anneals exploration to zero at the end of denoising and downweights exploration at the earliest steps, where small perturbations have the most influence on the final image. The two contributions, stepwise credit assignment and the improved SDE, are *complementary*: each helps on its own, and combining them does better than either alone.
 
 ## Experiments
 
-We trained Stable Diffusion 3.5-Medium with both Flow-GRPO and Stepwise-Flow-GRPO on three reward models of varying complexity: [PickScore](https://arxiv.org/abs/2305.01569) (a lightweight CNN), [ImageReward](https://arxiv.org/abs/2304.05977) (a medium transformer), and [UnifiedReward-7B](https://arxiv.org/abs/2503.05236) (a 7B-parameter VLM). Across all three, on both the [GenEval](https://arxiv.org/abs/2310.11513) compositional benchmark and the PickScore prompt set, Stepwise-Flow-GRPO converges faster per training iteration. Despite the per-iteration overhead of computing Tweedie estimates, it also converges faster in wall-clock time.
+We trained Stable Diffusion 3.5-Medium with both methods using three reward models: [PickScore](https://arxiv.org/abs/2305.01569) (a lightweight CNN trained on human preferences), [ImageReward](https://arxiv.org/abs/2304.05977) (a larger transformer trained on human preferences), and [UnifiedReward-7B](https://arxiv.org/abs/2503.05236) (a 7B vision-language model that scores both prompt alignment and visual quality). Evaluation prompts come from two sources: the [GenEval](https://arxiv.org/abs/2310.11513) benchmark, which probes counting, attribute binding, and spatial relations, and the PickScore prompt set.
+
+### Sample efficiency
+
+Figure 4 shows reward against training step for each reward-prompt combination. The headline finding is that Stepwise-Flow-GRPO reaches any given reward level in substantially fewer training steps than Flow-GRPO; the gap is largest early in training. This is the main result of the paper. The picture is the same in wall-clock time (the paper has the plot), though the gap there is less dramatic since each Stepwise-Flow-GRPO iteration costs more (it runs the reward model on \\(T\\) Tweedie estimates per trajectory instead of just one).
 
 ![Reward versus training step for Stepwise-Flow-GRPO and Flow-GRPO across four settings: PickScore on GenEval, ImageReward on GenEval, UnifiedReward on GenEval, and PickScore on the PickScore dataset.](./figure4-sample-efficiency.png)
 
-**Figure 4.** Reward versus training step for Stepwise-Flow-GRPO (blue) and Flow-GRPO (red) across four settings. Stepwise-Flow-GRPO dominates throughout training.
+**Figure 4.** Reward versus training step for Stepwise-Flow-GRPO (blue) and Flow-GRPO (red). The top row and bottom-left panel use GenEval prompts with PickScore, ImageReward, and UnifiedReward respectively; the bottom-right panel uses PickScore prompts with PickScore as the reward.
 
-The headline result comes from extended training. With 400 GPU hours on GenEval rewards, Stepwise-Flow-GRPO reaches **0.87 on GenEval overall**. For context: the base SD3.5-Medium scores 0.63, Flow-GRPO with extended training scores 0.72, and GPT-4o scores 0.84. The performance gap *widens* with training, particularly on counting (0.89), spatial positioning (0.73), and attribute binding (0.80), exactly the categories that demand precise compositional decisions.
+### Improved SDE composes with stepwise credit assignment
+
+Swapping the SDE is an independent intervention, so we ran the full 2x2: Flow-GRPO and Stepwise-Flow-GRPO, each with the original Flow-GRPO SDE and with our DDIM-inspired SDE.
+
+![Reward versus training step for four conditions: Flow-GRPO and Stepwise-Flow-GRPO, each with the original Flow-GRPO SDE and with the improved DDIM-inspired SDE. Both methods improve with the new SDE, and Stepwise-Flow-GRPO with the improved SDE is best.](./figure6-improved-sde-results.png)
+
+**Figure 5.** The 2x2 comparison. Both methods improve when we swap in the DDIM-inspired SDE, and Stepwise-Flow-GRPO retains its lead in both SDE regimes. The credit-assignment fix and the sampling fix are doing different work.
+
+### Stability
+
+A few cases where the stepwise method is not just faster but qualitatively more reliable:
+
+**UnifiedReward (7B VLM).** Flow-GRPO consistently diverged when trained against UnifiedReward. Stepwise-Flow-GRPO trained stably across runs. Per-step credit appears to keep the policy under control even when the reward gradient is noisy, which it tends to be with large VLM-based rewards.
+
+**OCR text rendering.** Trained against a combined OCR + PickScore reward, Flow-GRPO diverges after about 500 steps. Stepwise-Flow-GRPO keeps improving past 2000. Text rendering is intuitively a stress test for credit assignment because letter shapes and spacing have to be locked in early and sharpened late.
+
+### Final quality on GenEval
+
+To check that the sample-efficiency gains carry over to final image quality, we ran extended training (400 GPU hours) on GenEval rewards with cfg=4.5 and evaluated on the full GenEval benchmark. Stepwise-Flow-GRPO reaches **0.87 overall**, with the biggest gains on the categories that demand precise compositional decisions: counting, spatial positioning, and attribute binding.
 
 | Model                                | Overall  | Counting | Position | Attr. Binding |
 |:-------------------------------------|:--------:|:--------:|:--------:|:-------------:|
@@ -206,20 +227,16 @@ The headline result comes from extended training. With 400 GPU hours on GenEval 
 | GPT-4o                               | 0.84     | 0.85     | 0.75     | 0.61          |
 | **Stepwise-Flow-GRPO (400 GPU hrs)** | **0.87** | **0.89** | 0.73     | **0.80**      |
 
-A few qualitative wins worth highlighting:
+Qualitatively, Flow-GRPO fails on the kinds of compositional prompts that demand getting object layout right early: prompts like "a donut below a cat" or "a bus above a boat" frequently come out merged or physically implausible (e.g. a bus floating in the sky). Stepwise-Flow-GRPO is far more consistent on these prompts.
 
-**Stability on complex rewards.** When training with UnifiedReward (the 7B VLM), Flow-GRPO consistently diverged. Stepwise-Flow-GRPO trained stably throughout. This is not just an efficiency story. Stepwise credit assignment seems to provide real stability benefits when reward gradients are noisy, as they tend to be with large VLM-based rewards.
+![Qualitative comparison of Stepwise-Flow-GRPO and Flow-GRPO on six compositional GenEval prompts. Flow-GRPO frequently merges objects or places them in physically implausible configurations; Stepwise-Flow-GRPO produces cleaner compositions.](./figure3-qualitative.png)
 
-**OCR text rendering.** A particularly striking case: with a combined OCR + PickScore reward, Flow-GRPO diverges after about 500 steps, while Stepwise-Flow-GRPO continues improving for 2000+. Text rendering is hierarchical (letter shapes and spacing must be set early; sharpening happens late), so it is a natural stress test for credit assignment, and we see big gains here.
-
-**Compositional improvements.** Across qualitative comparisons, our method shows consistent gains in spatial reasoning, attribute binding, and counting. Flow-GRPO will sometimes merge objects when prompted with "X and Y", or place objects in physically implausible configurations (a bus floating in the sky, for example). Stepwise-Flow-GRPO produces cleaner compositions.
-
-We also explored several design alternatives, including an exponential-moving-average baseline, generalized advantage estimation (GAE) over gains, and an ODE-based progressive distillation variant. None beat the simple gain formulation. Sometimes the natural temporal structure of the problem is best preserved rather than modeled away.
+**Figure 6.** Side-by-side qualitative comparison on GenEval prompts (Flow-GRPO left, Stepwise-Flow-GRPO right). Flow-GRPO merges objects in rows 1 and 5, and produces a bus floating above the water in row 3. Stepwise-Flow-GRPO produces cleaner compositions with better spatial reasoning, attribute binding, and counting.
 
 ## Discussion
 
-Stepwise gains open up several directions worth exploring. The per-prompt variance of gains is itself a useful signal: prompts where gains vary wildly are likely "hard" examples and could drive curriculum learning. Adaptively weighting steps proportional to their gain variance could focus optimization on the high-information regions of the trajectory. Most ambitiously, gains give the model a way to detect bad intermediate states, which suggests the possibility of *self-correcting diffusion*, where the model learns to retry a poor decision rather than press on.
+Stepwise-Flow-GRPO replaces Flow-GRPO's single trajectory-level advantage with per-step gains computed from Tweedie estimates of the clean image, which is most of where the sample-efficiency win comes from. The DDIM-inspired SDE is a separate, simpler fix that helps both methods.
 
-There is also a clean conceptual takeaway. In multi-step generative processes (diffusion, flow matching, autoregressive language models, planning), the step-level structure is not a nuisance to be averaged over. It is information we should be exploiting. Uniform credit assignment is a tempting default, but it leaves signal on the table. Whenever your generative process has temporal hierarchy, finer-grained credit assignment likely pays. Tweedie's formula is the trick that makes it cheap for diffusion and flow models. Analogous tricks may exist for other domains.
+We also tried a few design variations of stepwise credit assignment that we expected might help: an EMA baseline to reduce per-step variance, GAE over the gain sequence, and an ODE-based progressive distillation variant. None outperformed the straightforward gain formulation.
 
-For more details, see the [paper](https://stepwiseflowgrpo.com), where we also cover ablations on the number of denoising substeps, normalization strategies, and a comparison to concurrent work that addresses the same problem from different angles.
+A few natural follow-ups: per-prompt gain variance is a candidate signal for curriculum learning, and the gains might be useful at inference time as well, for example to detect and re-do bad intermediate denoising steps. See the [paper](https://stepwiseflowgrpo.com) for ablations on the number of denoising substeps, normalization strategies, and a comparison to concurrent work that addresses the same problem from different angles.
