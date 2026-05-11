@@ -184,7 +184,7 @@ This formulation is designed around two properties. First, setting \\(\sigma\_{t
 
 There is a tradeoff. Marginal matching to the flow ODE (the property that Flow-GRPO's SDE achieves exactly) only holds for our SDE in the Taylor limit of small \\(\sigma\_{t}\\). For the small \\(\sigma\_{t}\\) we use in practice, the approximation is tight enough that the SDE remains a useful training surrogate for the ODE sampler we use at inference. The paper gives the formal Taylor-limit argument and variance calculation.
 
-![Qualitative comparison of final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results, while our DDIM-inspired SDE produces clean images while still injecting enough stochasticity for policy gradients.](./figure8-improved-sde.png)
+<img style="width:75%; display:block; margin:auto;" src="./figure8-improved-sde.png" alt="Qualitative comparison of final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results, while our DDIM-inspired SDE produces clean images while still injecting enough stochasticity for policy gradients.">
 
 **Figure 3.** Final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results (middle column); our DDIM-inspired SDE produces clean images (right column) while still injecting enough stochasticity for policy gradients.
 
@@ -231,7 +231,7 @@ To check that the sample-efficiency gains carry over to final image quality, we 
 
 Qualitatively, Flow-GRPO fails on the kinds of compositional prompts that demand getting object layout right early: prompts like "a donut below a cat" or "a bus above a boat" frequently come out merged or physically implausible (e.g. a bus floating in the sky). Stepwise-Flow-GRPO is far more consistent on these prompts.
 
-![Qualitative comparison of Stepwise-Flow-GRPO and Flow-GRPO on six compositional GenEval prompts. Flow-GRPO frequently merges objects or places them in physically implausible configurations; Stepwise-Flow-GRPO produces cleaner compositions.](./figure3-qualitative.png)
+<img style="width:75%; display:block; margin:auto;" src="./figure3-qualitative.png" alt="Qualitative comparison of Stepwise-Flow-GRPO and Flow-GRPO on six compositional GenEval prompts. Flow-GRPO frequently merges objects or places them in physically implausible configurations; Stepwise-Flow-GRPO produces cleaner compositions.">
 
 **Figure 6.** Side-by-side qualitative comparison on GenEval prompts (Flow-GRPO left, Stepwise-Flow-GRPO right). Flow-GRPO merges objects in rows 1 and 5, and produces a bus floating above the water in row 3. Stepwise-Flow-GRPO produces cleaner compositions with better spatial reasoning, attribute binding, and counting.
 
