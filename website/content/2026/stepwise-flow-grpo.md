@@ -20,13 +20,13 @@ The current state of the art, [Flow-GRPO](https://arxiv.org/abs/2505.05470), sid
 
 This blog post describes our recent work, [_Stepwise Credit Assignment for GRPO on Flow Matching Models_](https://stepwiseflowgrpo.com), which proposes a fix.
 
-## TL; DR
+## TL;DR
 
 - **Problem.** Flow-GRPO assigns the same advantage to every denoising step in a trajectory, ignoring that early steps determine composition while late steps refine details. A trajectory with bad early decisions that get corrected later is reinforced just as strongly as one with good decisions throughout.
 - **Stepwise rewards via Tweedie.** We score every denoising step by applying the reward model to a few-step Tweedie estimate \\(\hat{x}\_{0}(t) = \mathbb{E}[x\_{0} \mid x\_{t}]\\) of the clean image. This is essentially free since \\(\hat{x}\_{0}(t)\\) reuses the predicted noise that the flow model already computes at every step.
 - **Stepwise gains, not raw rewards.** We optimize the per-step gain \\(g\_{t} = r\_{t-1} - r\_{t}\\). The gains telescope to the total reward improvement, so we get fine-grained credit assignment without changing the global objective.
 - **Improved SDE.** Flow-GRPO's SDE inadvertently injects extra noise at every step, leaving final samples noisy and degrading the reward signal. We replace it with a DDIM-inspired alternative that does not add unintended noise and recovers the flow ODE in the appropriate limits.
-- **Results.** **Stepwise-Flow-GRPO has better sample efficiency than Flow-GRPO**, in both training iterations and wall-clock time, across three reward models (PickScore, ImageReward, UnifiedReward) on two datasets. The improved SDE accelerates *both* methods, and combining the two changes gives the best results overall. Stepwise-Flow-GRPO also trains stably where Flow-GRPO diverges, including on the 7B UnifiedReward VLM and on OCR text rendering.
+- **Results.** **Stepwise-Flow-GRPO has better sample efficiency than Flow-GRPO**, in both training iterations and wall-clock time, across three reward models (PickScore, ImageReward, UnifiedReward) on two prompt sets. The improved SDE accelerates *both* methods, and combining the two changes gives the best results overall. Stepwise-Flow-GRPO also trains stably where Flow-GRPO diverges, including on the 7B UnifiedReward VLM and on OCR text rendering.
 
 ![Two trajectories from the same prompt have similar final rewards but very different intermediate behavior. Trajectory 0 dips at t=0.86 before recovering, and trajectory 1 drops sharply at t=0.71. Uniform credit assignment treats them identically.](./figure1-motivation.png)
 
@@ -52,7 +52,7 @@ To generate an image, we start from pure noise \\(x\_{1} \sim \mathcal{N}(0, I)\
 
 The deterministic ODE works fine for inference, but it is not suitable for reinforcement learning. RL needs to explore: from the same prompt and same initial noise, we need the model to produce *different* trajectories that we can reward differently and compare against each other. A deterministic process produces one trajectory per starting point, so there is nothing to compare.
 
-Following [Flow-GRPO](https://arxiv.org/abs/2505.05470), we replace the deterministic ODE with a stochastic differential equation (SDE) that injects a small amount of noise at each step. The SDE is carefully constructed so that, at every time \\(t\\), its distribution over \\(x\_{t}\\) matches the original ODE. This *marginal-preserving* property is important: it means that optimizing the SDE policy also improves the deterministic ODE we use at inference. After discretization, each denoising step becomes a draw from a Gaussian:
+Following [Flow-GRPO](https://arxiv.org/abs/2505.05470), we replace the deterministic ODE with a stochastic differential equation (SDE) that injects a small amount of noise at each step. The SDE is carefully constructed so that, at every time \\(t\\), its distribution over \\(x\_{t}\\) matches the original ODE. This *marginal-preserving* property is important: it keeps RL training aligned with the deterministic ODE we use at inference, rather than optimizing a sampler with a different sequence of intermediate distributions. After discretization, each denoising step becomes a draw from a Gaussian:
 
 \\[ \pi\_{\theta}(x\_{t-\Delta t} \mid x\_{t}, c) = \mathcal{N}(x\_{t-\Delta t};\ \mu\_{t},\ \sigma\_{t}^{2} \Delta t \cdot I) \\]
 
@@ -152,12 +152,14 @@ for i in range(N):
     x[i, T] = x_T
     for t in range(T-1, -1, -1):
         x[i, t] ~ pi_theta( . | x[i, t+1], c)               # SDE step
-    for t in range(T):
+    for t in range(T + 1):
         x_hat_0[i, t] = denoise(x[i, t], substeps=T_prime)  # Tweedie estimate
         r[i, t]       = R(x_hat_0[i, t], c)                 # reward at step t
 
-# Stepwise gains
-g[i, t] = r[i, t-1] - r[i, t]
+# Stepwise gains for t = 1, ..., T
+for i in range(N):
+    for t in range(1, T + 1):
+        g[i, t] = r[i, t-1] - r[i, t]
 
 # Joint normalization across all i, t
 A_tilde = (g - mean(g)) / std(g)
@@ -176,11 +178,11 @@ There is a separate issue with Flow-GRPO that we noticed while developing stepwi
 
 The new update rule interpolates between deterministic and stochastic sampling:
 
-\\[ x\_{t-\Delta t} = (1 - (t-\Delta t)) \hat{x}\_{0}(t) + \sqrt{(t-\Delta t)^{2} - \sigma\_{t}^{2}} \, \hat{x}\_{1} + \sigma\_{t} \epsilon \\]
+\\[ x\_{t-\Delta t} = (1 - (t-\Delta t)) \hat{x}\_{0}(t) + \sqrt{(t-\Delta t)^{2} - \sigma\_{t}^{2}} \hat{x}\_{1} + \sigma\_{t} \epsilon \\]
 
 This formulation is designed around two properties. First, setting \\(\sigma\_{t} = 0\\) zeroes out the noise term and recovers the deterministic flow ODE exactly, so we can dial in the amount of stochasticity we want for RL training. Second, the noise injected at each step is calibrated to match the noise level that rectified flow assigns to that timestep, so intermediate samples stay on the trajectory the model was trained to denoise rather than drifting off it.
 
-There is a tradeoff. Marginal matching to the flow ODE (the property that Flow-GRPO's SDE achieves exactly) only holds for our SDE in the Taylor limit of small \\(\sigma\_{t}\\). For the small \\(\sigma\_{t}\\) we use in practice, the approximation is tight enough that optimizing the SDE still improves the ODE we use at inference. The paper has the precise statements.
+There is a tradeoff. Marginal matching to the flow ODE (the property that Flow-GRPO's SDE achieves exactly) only holds for our SDE in the Taylor limit of small \\(\sigma\_{t}\\). For the small \\(\sigma\_{t}\\) we use in practice, the approximation is tight enough that the SDE remains a useful training surrogate for the ODE sampler we use at inference. The paper gives the formal Taylor-limit argument and variance calculation.
 
 ![Qualitative comparison of final images sampled with each SDE. Flow-GRPO's SDE produces visibly noisy results, while our DDIM-inspired SDE produces clean images while still injecting enough stochasticity for policy gradients.](./figure8-improved-sde.png)
 
@@ -196,7 +198,7 @@ We trained Stable Diffusion 3.5-Medium with both methods using three reward mode
 
 Figure 4 shows reward against training step for each reward-prompt combination. The headline finding is that Stepwise-Flow-GRPO reaches any given reward level in substantially fewer training steps than Flow-GRPO; the gap is largest early in training. This is the main result of the paper. The picture is the same in wall-clock time (the paper has the plot), though the gap there is less dramatic since each Stepwise-Flow-GRPO iteration costs more (it runs the reward model on \\(T\\) Tweedie estimates per trajectory instead of just one).
 
-![Reward versus training step for Stepwise-Flow-GRPO and Flow-GRPO across four settings: PickScore on GenEval, ImageReward on GenEval, UnifiedReward on GenEval, and PickScore on the PickScore dataset.](./figure4-sample-efficiency.png)
+![Reward versus training step for Stepwise-Flow-GRPO and Flow-GRPO across four settings: PickScore on GenEval, ImageReward on GenEval, UnifiedReward on GenEval, and PickScore on the PickScore prompt set.](./figure4-sample-efficiency.png)
 
 **Figure 4.** Reward versus training step for Stepwise-Flow-GRPO (blue) and Flow-GRPO (red). The top row and bottom-left panel use GenEval prompts with PickScore, ImageReward, and UnifiedReward respectively; the bottom-right panel uses PickScore prompts with PickScore as the reward.
 
@@ -204,9 +206,9 @@ Figure 4 shows reward against training step for each reward-prompt combination. 
 
 Swapping the SDE is an independent intervention, so we ran the full 2x2: Flow-GRPO and Stepwise-Flow-GRPO, each with the original Flow-GRPO SDE and with our DDIM-inspired SDE.
 
-![Reward versus training step for four conditions: Flow-GRPO and Stepwise-Flow-GRPO, each with the original Flow-GRPO SDE and with the improved DDIM-inspired SDE. Both methods improve with the new SDE, and Stepwise-Flow-GRPO with the improved SDE is best.](./figure6-improved-sde-results.png)
+![Reward versus training step for Flow-GRPO and Stepwise-Flow-GRPO under the original Flow-GRPO SDE and the improved DDIM-inspired SDE across four reward-prompt settings.](./figure5-improved-sde-results.png)
 
-**Figure 5.** The 2x2 comparison. Both methods improve when we swap in the DDIM-inspired SDE, and Stepwise-Flow-GRPO retains its lead in both SDE regimes. The credit-assignment fix and the sampling fix are doing different work.
+**Figure 5.** The 2x2 comparison, repeated across reward-prompt settings. Each row fixes the reward model and prompt source; the left column uses the original Flow-GRPO SDE, and the right column uses the DDIM-inspired SDE. Both methods improve when we swap in the DDIM-inspired SDE, and Stepwise-Flow-GRPO retains its lead in both SDE regimes. The credit-assignment fix and the sampling fix are doing different work.
 
 ### Stability
 
