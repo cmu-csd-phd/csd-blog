@@ -18,7 +18,7 @@ Flow matching models like Stable Diffusion 3.5 and FLUX generate an image by ite
 
 The current state of the art, [Flow-GRPO](https://arxiv.org/abs/2505.05470), sidesteps this question. Every denoising step gets the same credit, computed from the reward on the final image. If the image is good, every step is reinforced equally. If it is bad, every step is penalized. This is a tempting simplification, but it ignores something important about how diffusion generation actually works. Different steps do fundamentally different things, and treating them identically wastes most of the available learning signal.
 
-This blog post describes our recent work, [_Stepwise Credit Assignment for GRPO on Flow Matching Models_](https://stepwiseflowgrpo.com) (to appear at CVPR 2026), which proposes a fix.
+This blog post describes our recent work, [_Stepwise Credit Assignment for GRPO on Flow Matching Models_](https://stepwiseflowgrpo.com) (to appear at CVPR 2026; work done while interning at Adobe Research), which proposes a fix.
 
 ## TL;DR
 
