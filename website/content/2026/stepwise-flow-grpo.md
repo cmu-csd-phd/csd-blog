@@ -1,6 +1,6 @@
 +++
 title = "Crediting the Right Steps: Stepwise Reward Assignment for RL on Flow Matching Models"
-date = 2026-05-04
+date = 2026-05-22
 
 [taxonomies]
 areas = ["Artificial Intelligence"]
@@ -9,9 +9,9 @@ tags = ["reinforcement learning", "diffusion models", "flow matching", "credit a
 [extra]
 author = {name = "Yash Savani", url = "https://yashsavani.com" }
 committee = [
-    {name = "Committee Member 1's Full Name", url = "Committee Member 1's page"},
-    {name = "Committee Member 2's Full Name", url = "Committee Member 2's page"},
-    {name = "Committee Member 3's Full Name", url = "Committee Member 3's page"}
+    {name = "Nicholas M. Boffi", url = "https://nmboffi.github.io/"},
+    {name = "Aviral Kumar", url = "https://aviralkumar2907.github.io/"},
+    {name = "Victor Akinwande", url = "https://home.victorakinwande.com/"}
 ]
 +++
 Flow matching models like Stable Diffusion 3.5 and FLUX generate an image by iteratively denoising random noise over many small steps. When we want to fine-tune these models with reinforcement learning, say to make them follow text prompts more faithfully or produce more aesthetic outputs, a natural question arises: which steps deserve credit, or blame, for the final result?
