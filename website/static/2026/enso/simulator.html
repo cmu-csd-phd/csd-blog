@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIC Interface Simulator</title>
+<style>
+/*
+ * Design system: Stripe / Notion family — warm stone neutrals + indigo accent,
+ * harmonized -600 categorical colors used consistently across the whole diagram.
+ *   Structure: indigo-600 accent (PCIe, primary buttons, toggle)
+ *   Neutrals:  stone scale (warm cream paper)
+ *   Data:      blue-600, purple-600, cyan-600, amber-600 — all same lightness step
+ *              so they read as a curated set, not a rainbow.
+ */
+:root{
+  --surface:#ffffff;
+  --surface-2:#faf9f7;       /* warm paper */
+  --surface-3:#f5f4f1;       /* stone-100-ish */
+  --border:#e7e5e4;          /* stone-200 */
+  --border-strong:#d6d3d1;   /* stone-300 */
+  --ink-1:#1c1917;           /* stone-900 */
+  --ink-2:#57534e;           /* stone-600 */
+  --ink-3:#a8a29e;           /* stone-400 */
+  --accent:#4f46e5;          /* indigo-600 */
+  --accent-hover:#3730a3;    /* indigo-800 */
+  --accent-soft:#eef2ff;     /* indigo-50 */
+  --accent-ink:#312e81;      /* indigo-900 */
+  --danger:#dc2626;          /* red-600 */
+  --shadow-sm:0 1px 2px rgba(28,25,23,.04),0 1px 1px rgba(28,25,23,.03);
+  --shadow-md:0 4px 16px rgba(28,25,23,.06),0 2px 4px rgba(28,25,23,.04);
+  --shadow-focus:0 0 0 3px rgba(79,70,229,.20);
+  --radius:10px;
+  --radius-sm:6px;
+  --label-font:11px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:transparent;color:var(--ink-1);-webkit-font-smoothing:antialiased}
+#sim{max-width:940px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+
+/* Tiny reusable bits */
+.label{font:var(--label-font);font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.value{font-size:14px;font-weight:500;color:var(--ink-1);font-variant-numeric:tabular-nums}
+
+/* Config top bar: [ title ........... Restart  Settings ▾ ]
+   In locked mode the Settings button is hidden — bar becomes [ title ... Restart ]. */
+#config{background:var(--surface);border-bottom:1px solid var(--border)}
+.config-top{display:flex;align-items:stretch}
+.cfg-title{flex:1;min-width:0;padding:11px 18px;font-size:13px;color:var(--ink-1);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center}
+#cfg-toggle{appearance:none;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:11px 16px;font:500 13px/1 inherit;color:var(--ink-1);transition:background-color .12s}
+#cfg-toggle:hover{background:var(--surface-2)}
+#cfg-toggle:focus-visible{outline:none;background:var(--surface-2)}
+.config-top:has(#cfg-toggle[aria-expanded="true"]){border-bottom:1px solid var(--border)}
+.cfg-summary-label{font:var(--label-font);font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.chevron{width:14px;height:14px;color:var(--ink-3);transition:transform .15s;flex-shrink:0}
+#cfg-toggle[aria-expanded="true"] .chevron{transform:rotate(180deg)}
+#cfg-body{display:none;padding:14px 18px;flex-wrap:wrap;gap:0;align-items:center}
+#config.expanded #cfg-body{display:flex}
+.btn-restart{appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);font:500 12px/1 inherit;padding:5px 11px;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
+.btn-restart:hover{background:var(--surface-2);color:var(--ink-1);border-color:var(--border-strong)}
+.btn-restart:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+/* Top-bar restart: only visible in locked mode. When unlocked, Restart lives inside Settings. */
+.config-top .btn-restart{flex-shrink:0;align-self:center;margin-right:10px}
+#config:not(.locked) .config-top .btn-restart{display:none}
+/* Body restart lives in cfg-body; only visible alongside the rest of the panel. */
+#cfg-body .btn-restart{align-self:center}
+/* Locked mode: Settings button hidden — title still shows current config. */
+#config.locked #cfg-toggle{display:none}
+#config.locked #cfg-body{display:none!important}
+.cfg-group{display:flex;flex-direction:column;gap:6px;padding:0 18px;position:relative;min-height:46px;justify-content:center}
+.cfg-group:first-child{padding-left:0}
+.cfg-group + .cfg-group::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);height:32px;width:1px;background:var(--border)}
+.cfg-group .label{margin-bottom:1px}
+.cfg-spacer{flex:1}
+
+/* Segmented control — keep font-weight constant to avoid layout shift during state change */
+.segmented{display:inline-flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px;gap:2px}
+.segmented button{appearance:none;border:0;background:transparent;color:var(--ink-2);font:600 13px/1 inherit;padding:6px 12px;border-radius:6px;cursor:pointer;transition:background-color .12s,color .12s,box-shadow .12s;letter-spacing:.01em}
+.segmented button:hover{color:var(--ink-1)}
+.segmented button[aria-pressed="true"]{background:var(--surface);color:var(--ink-1);box-shadow:var(--shadow-sm)}
+.segmented button:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+
+/* Slider control */
+.slider-wrap{display:flex;flex-direction:column;gap:5px;min-width:120px}
+.slider-row{display:flex;align-items:center;gap:10px}
+.slider-row .value{min-width:48px}
+input[type=range].slider{-webkit-appearance:none;appearance:none;width:90px;height:4px;background:var(--surface-3);border-radius:2px;outline:none;border:none;padding:0;margin:0}
+input[type=range].slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .12s}
+input[type=range].slider::-webkit-slider-thumb:hover{transform:scale(1.15)}
+input[type=range].slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--surface);box-shadow:var(--shadow-sm);cursor:pointer}
+input[type=range].slider:focus-visible::-webkit-slider-thumb{box-shadow:var(--shadow-focus)}
+/* Editable size value: click the display to swap it for a text input. */
+.size-val-display{cursor:text;padding:2px 4px;border-radius:4px;transition:background-color .12s}
+.size-val-display:hover{background:var(--surface-3)}
+.size-val-display:focus-visible{outline:none;background:var(--surface-3);box-shadow:var(--shadow-focus)}
+.size-val-input{width:72px;padding:2px 6px;border:1px solid var(--accent);border-radius:5px;background:var(--surface);color:var(--ink-1);font-size:14px;font-weight:500;font-variant-numeric:tabular-nums;outline:none;text-align:right}
+.size-val-input:focus{box-shadow:var(--shadow-focus)}
+
+/* Toggle switch */
+.toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer;user-select:none}
+.toggle input{position:absolute;opacity:0;width:0;height:0}
+.toggle .track{width:32px;height:18px;background:var(--surface-3);border:1px solid var(--border-strong);border-radius:999px;transition:background .15s,border-color .15s;position:relative;flex-shrink:0}
+.toggle .track::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow-sm);transition:transform .15s}
+.toggle input:checked + .track{background:var(--accent);border-color:var(--accent)}
+.toggle input:checked + .track::after{transform:translateX(14px)}
+.toggle input:focus-visible + .track{box-shadow:var(--shadow-focus)}
+
+/* Reset icon-button */
+.btn-reset{appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--ink-2);font:500 13px/1 inherit;padding:7px 12px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .12s}
+.btn-reset:hover{background:var(--surface-2);color:var(--ink-1);border-color:var(--border-strong)}
+.btn-reset:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+
+/* Play-sequence message banner (URL command m=...). Sits between config and diagram.
+   Collapsed by default; `.shown` class drives the slide+fade transition.
+   Font + weight + padding match the top bar (.cfg-title) so the two rows feel unified. */
+#play-msg{padding:0 18px;background:var(--surface);border-bottom:0 solid var(--border);color:var(--ink-1);font-size:13px;font-weight:500;display:flex;align-items:center;justify-content:center;gap:10px;max-height:0;opacity:0;overflow:hidden;transition:max-height .28s ease, opacity .2s ease, padding-top .28s ease, padding-bottom .28s ease, border-bottom-width .28s ease}
+#play-msg.shown{max-height:80px;opacity:1;padding-top:11px;padding-bottom:11px;border-bottom-width:1px}
+#play-msg::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.18);flex-shrink:0;animation:play-msg-pulse 1.5s ease-in-out infinite}
+@keyframes play-msg-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
+/* Swap animation when banner text changes while the banner is already visible. */
+#play-msg-text{display:inline-block;transition:opacity .5s ease, transform .5s ease}
+#play-msg-text.swap-out{opacity:0;transform:translateY(-4px)}
+
+/* Diagram area — subtle tinted plate */
+#diagram-wrap{padding:4px 14px;overflow:hidden;background:var(--surface-2);border-bottom:1px solid var(--border)}
+svg#diagram{display:block;width:100%;max-width:900px;margin:0 auto}
+
+/* SVG boxes — stone gradient from NIC through L1 to CPU */
+.nic-box{fill:#fafaf9;stroke:#78716c;stroke-width:2;rx:8}
+.llc-box{fill:#fafaf9;stroke:#a8a29e;stroke-width:1.5;rx:8}
+.l2-box{fill:#f5f5f4;stroke:#78716c;stroke-width:1.5;rx:6}
+.l1-box{fill:#e7e5e4;stroke:#44403c;stroke-width:2;rx:6}
+.cpu-box{fill:#1c1917;stroke:#292524;stroke-width:2;rx:8}
+.mem-box{fill:#fafaf9;stroke:#a8a29e;stroke-width:1.5;rx:8}
+
+/* Text */
+.box-title{font-size:16px;font-weight:700;text-anchor:middle;dominant-baseline:middle}
+.box-title-nic{fill:#292524}
+.box-title-llc{fill:#57534e}
+.box-title-cache{fill:#292524}
+.box-title-l1{fill:#1c1917}
+.box-title-cpu{fill:#d6d3d1}
+.box-title-mem{fill:#57534e}
+.section-label{font-size:16px;font-weight:700;fill:#a8a29e;text-anchor:middle}
+.pcie-label{font-size:16px;font-weight:700;fill:#4f46e5;text-anchor:middle}
+.lat-badge{font-size:16px;font-weight:600;fill:#a8a29e;text-anchor:end}
+.head-label{fill:#1c1917;font-size:16px;font-weight:700;text-anchor:middle}
+.tail-label{fill:#78716c;font-size:16px;font-weight:700;text-anchor:middle}
+.ptr-down{fill:#1c1917}
+.ptr-up{fill:#78716c}
+
+/* Packet buffers — stone container, data-format fill */
+.pkt-buf-bg{fill:#fafaf9;stroke:#d6d3d1;stroke-width:1.2;rx:5}
+.pkt-buf-fill-packet{fill:#2563eb}
+.pkt-buf-fill-message{fill:#9333ea}
+.pkt-buf-fill-bytestream{fill:#0891b2}
+.pkt-buf-label{font-size:16px;font-weight:600;fill:#fff;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+
+/* Descriptor/notif cells — amber-600 for control-plane metadata */
+.cell-empty{fill:#f5f5f4;stroke:#d6d3d1;stroke-width:1;rx:3}
+.cell-desc{fill:#d97706;stroke:#b45309;stroke-width:1.2;rx:3}
+.cell-notif{fill:#d97706;stroke:#b45309;stroke-width:1.2;rx:3}
+.cell-label{font-size:16px;font-weight:700;fill:#fff;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+.cell-idx{font-size:16px;fill:#a8a29e;text-anchor:middle;dominant-baseline:middle}
+
+/* Arrows */
+.desc-arrow{stroke:#d6d3d1;stroke-width:1.3;fill:none}
+.notif-arrow{stroke:#d97706;stroke-width:1.5;fill:none}
+.tail-arrow{stroke:#78716c;stroke-width:1.5;fill:none}
+
+/* Ensō pipe bar — stone */
+.pipe-bg{fill:#e7e5e4;rx:4}
+.pipe-bg-label{font-size:16px;font-weight:700;fill:#292524;fill-opacity:0.22;text-anchor:end;dominant-baseline:middle;pointer-events:none}
+.pipe-border{fill:none;stroke:#78716c;stroke-width:1.5;rx:4}
+.pipe-divider{stroke:rgba(255,255,255,.6);stroke-width:1}
+.pipe-msg-label{font-size:16px;font-weight:600;fill:#fff;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+
+/* Actions bar */
+#actions{padding:8px 18px;display:flex;gap:10px;align-items:center;background:var(--surface);flex-wrap:wrap}
+.btn{appearance:none;border:1px solid transparent;border-radius:8px;font:600 13px/1 inherit;padding:7px 16px;cursor:pointer;transition:all .12s;letter-spacing:.01em;display:inline-flex;align-items:center;gap:6px}
+.btn-receive{background:var(--accent);color:#fff;box-shadow:var(--shadow-sm)}
+.btn-receive:hover:not(:disabled){background:var(--accent-hover);box-shadow:0 4px 12px rgba(79,70,229,.28);transform:translateY(-1px)}
+.btn-consume{background:var(--surface);color:var(--accent);border-color:var(--accent)}
+.btn-consume:hover:not(:disabled){background:var(--accent-soft)}
+.btn:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+.btn:disabled{background:var(--surface-3);color:var(--ink-3);border-color:transparent;cursor:not-allowed;box-shadow:none;transform:none}
+
+#stats{margin-left:auto;display:flex;gap:8px}
+.stat{display:inline-flex;align-items:baseline;gap:7px;padding:5px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px}
+.stat-key{font:var(--label-font);font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.stat-val{font-size:14px;font-weight:600;color:var(--ink-1);line-height:1;font-variant-numeric:tabular-nums}
+.stat-val.pcie{color:var(--accent)}
+
+/* Status bar — status text on left, legend chips on right */
+#statusbar{padding:8px 18px;font-size:13px;color:var(--ink-2);background:var(--surface-2);border-top:1px solid var(--border);min-height:34px;line-height:1.5;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+#statusbar::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ink-3);flex-shrink:0}
+#statusbar.warn::before{background:var(--danger)}
+#statusbar-text{flex:1;min-width:140px}
+#statusbar strong{color:var(--ink-1);font-weight:600}
+
+/* Legend chips (inline within status bar) */
+#legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-2)}
+.leg-box{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+
+/* Glow animation (L1 prefetch) */
+@keyframes glow{0%,100%{opacity:1}50%{opacity:.5}}
+.glow{animation:glow .6s ease-in-out infinite}
+/* Cache box flash — indigo pulses, brighter = faster cache */
+@keyframes cache-box-flash{0%{opacity:.42}100%{opacity:0}}
+.cache-box-flash{animation:cache-box-flash .7s ease-out forwards;pointer-events:none}
+
+/* ---------- Hide legend when it would wrap below the status text ---------- */
+@media (max-width:700px){
+  #legend{display:none}
+}
+
+/* ---------- Responsive: tablet (≤820px) ---------- */
+@media (max-width:820px){
+  #cfg-toggle{padding:10px 14px}
+  #cfg-body{padding:12px 14px;gap:14px 18px}
+  .cfg-group{padding:0;min-height:auto;gap:5px}
+  .cfg-group + .cfg-group::before{display:none}
+  .cfg-spacer{display:none}
+  #actions{padding:12px 14px;gap:8px}
+  #statusbar{padding:8px 14px}
+  #diagram-wrap{padding:4px 10px}
+}
+
+/* ---------- Responsive: mobile (≤560px) ---------- */
+@media (max-width:560px){
+  #sim{border-radius:10px}
+  /* Each control row spans full width and stacks */
+  .cfg-group{width:100%}
+  .segmented{width:100%}
+  .segmented button{flex:1;text-align:center}
+  .slider-wrap{min-width:0}
+  .slider-row{width:100%}
+  input[type=range].slider{flex:1;width:auto}
+  .slider-row .value{min-width:42px;text-align:right}
+  .btn-reset{width:100%;justify-content:center;padding:9px 12px}
+  /* Actions row: buttons share row; stats wrap to next row at full width */
+  #actions{padding:12px 14px;gap:10px}
+  .btn-receive,.btn-consume{flex:1 1 0;justify-content:center;padding:11px 16px}
+  #stats{margin-left:0;flex-basis:100%;width:100%;gap:8px}
+  .stat{flex:1;min-width:0;align-items:center;text-align:center;padding:8px 10px}
+  /* Status + legend tighter */
+  #statusbar{font-size:12px;padding:9px 14px}
+  #legend{gap:10px 14px;padding:9px 14px}
+  .leg{font-size:11px}
+}
+</style>
+</head>
+<body>
+<div id="sim">
+  <div id="config">
+    <div class="config-top">
+      <span class="cfg-title" id="cfg-summary">Packetized Interface · 64 B Packets</span>
+      <button class="btn-restart" onclick="restart()" aria-label="Restart simulation"><span aria-hidden="true">↺</span> Restart</button>
+      <button id="cfg-toggle" type="button" aria-expanded="false" aria-controls="cfg-body">
+        <span class="cfg-summary-label">Settings</span>
+        <svg class="chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div id="cfg-body">
+    <div class="cfg-group">
+      <span class="label">NIC Interface</span>
+      <div class="segmented" id="seg-iface" role="group" aria-label="NIC Interface">
+        <button type="button" data-value="packetized" aria-pressed="true">Packetized</button>
+        <button type="button" data-value="enso" aria-pressed="false">Ensō</button>
+      </div>
+      <select id="cfg-iface" hidden>
+        <option value="packetized">Packetized</option>
+        <option value="enso">Ensō</option>
+      </select>
+    </div>
+    <div class="cfg-group">
+      <span class="label">Data Format</span>
+      <div class="segmented" id="seg-format" role="group" aria-label="Data Format">
+        <button type="button" data-value="packet" aria-pressed="true">Packet</button>
+        <button type="button" data-value="message" aria-pressed="false">Message</button>
+        <button type="button" data-value="bytestream" aria-pressed="false">Bytestream</button>
+      </div>
+      <select id="cfg-format" hidden>
+        <option value="packet">Packet</option>
+        <option value="message">Message</option>
+        <option value="bytestream">Bytestream</option>
+      </select>
+    </div>
+    <div class="cfg-group slider-wrap">
+      <span class="label">Size</span>
+      <div class="slider-row">
+        <input type="range" id="cfg-size" class="slider" min="64" max="1518" step="1" value="64">
+        <span class="value size-val-display" id="size-val" tabindex="0" role="button" title="Click to type a size">64 B</span>
+        <input type="text" class="value size-val-input" id="size-val-input" hidden inputmode="decimal" aria-label="Custom size">
+      </div>
+    </div>
+    <div class="cfg-group slider-wrap">
+      <span class="label">Speed</span>
+      <div class="slider-row">
+        <input type="range" id="cfg-speed" class="slider" min="0.1" max="4" step="0.1" value="1">
+        <span class="value" id="speed-val">1×</span>
+      </div>
+    </div>
+    <div class="cfg-group">
+      <span class="label">Show Cache</span>
+      <label class="toggle"><input type="checkbox" id="cfg-cache"><span class="track"></span></label>
+    </div>
+    <div class="cfg-spacer"></div>
+    <div class="cfg-group">
+      <button class="btn-restart" onclick="restart()" aria-label="Restart simulation"><span aria-hidden="true">↺</span> Restart</button>
+    </div>
+    </div>
+  </div>
+
+  <div id="play-msg"><span id="play-msg-text"></span></div>
+
+  <div id="diagram-wrap">
+    <svg id="diagram" viewBox="0 30 900 510" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr-gray" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0,9 3.5,0 7" fill="#a8a29e"/>
+        </marker>
+        <marker id="arr-orange" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0,9 3.5,0 7" fill="#d97706"/>
+        </marker>
+        <marker id="arr-cyan" markerWidth="9" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+          <polygon points="0 0,9 3.5,0 7" fill="#78716c"/>
+        </marker>
+        <marker id="arr-white" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+          <polygon points="0 0,6 2,0 4" fill="rgba(255,255,255,.7)"/>
+        </marker>
+        <clipPath id="llc-clip"><rect id="llc-clip-r" x="280" y="50" width="610" height="310"/></clipPath>
+        <clipPath id="pcie-clip"><rect id="pcie-clip-r" x="150" y="0" width="130" height="600"/></clipPath>
+        <filter id="glow-f" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="txt-shadow" x="-20%" y="-60%" width="140%" height="220%">
+          <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#0f172a" flood-opacity="0.55"/>
+        </filter>
+        <marker id="arr-pcie" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0,8 3,0 6" fill="#4f46e5"/>
+        </marker>
+      </defs>
+      <g id="g-static"></g>
+      <g id="g-cells"></g>
+      <g id="g-pointers"></g>
+      <g id="g-arrows"></g>
+      <g id="g-cache-highlight"></g>
+      <g id="g-cache-flow"></g>
+      <g id="g-pcie-particles" clip-path="url(#pcie-clip)"></g>
+      <g id="g-llc-particles" clip-path="url(#llc-clip)"></g>
+    </svg>
+  </div>
+
+  <div id="actions">
+    <button class="btn btn-receive" id="btn-receive" onclick="actionReceive()">Receive</button>
+    <button class="btn btn-consume" id="btn-consume" onclick="actionConsume()" disabled>Consume</button>
+    <div id="stats">
+      <div class="stat" id="stat-pcie" title="PCIe Efficiency"><span class="stat-key">PCIe Efficiency</span><span class="stat-val pcie" id="s-pcie">—</span></div>
+      <div class="stat" id="stat-l1d" title="L1d Cache Serving"><span class="stat-key">L1d Hits</span><span class="stat-val" id="s-lat">—</span></div>
+    </div>
+  </div>
+  <div id="statusbar">
+    <span id="statusbar-text">Ready — press <strong>Receive</strong> to simulate an incoming packet.</span>
+    <div id="legend">
+      <div class="leg"><div class="leg-box" style="background:#2563eb"></div>Packet</div>
+      <div class="leg"><div class="leg-box" style="background:#9333ea"></div>Message</div>
+      <div class="leg"><div class="leg-box" style="background:#0891b2"></div>Bytestream</div>
+      <div class="leg"><div class="leg-box" style="background:#d97706"></div>Metadata</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// LAYOUT
+// ================================================================
+const L = {
+  NIC_X:15, NIC_Y:50, NIC_W:130, NIC_H:230,
+  PC_X1:150, PC_X2:280, PC_Y:165, PC_H:36,
+  LLC_X:280, LLC_Y:50, LLC_W:610, LLC_H:230,
+  L2_Y:288, L2_H:52, L1_Y:348, L1_H:52,
+  CPU_Y:408, CPU_H:48,
+  // Ring buffer strip inside LLC (bottom area)
+  RING_Y: 218,  // y of ring cells; tail label at RING_Y+RING_H+23=269 < LLC_B=280 ✓
+  RING_H: 28,
+  // Packet buffer geometry
+  PKT_W:118, PKT_H:28,
+  // Ensō pipe bar — shifted up so pipe-tail label (183) and ring-head label (205) have 22px gap
+  PIPE_Y: 104, PIPE_H: 56,
+  // Cell (desc/notif)
+  CW:38, CH:28, CGAP:5,
+};
+L.LLC_R = L.LLC_X + L.LLC_W;
+L.LLC_B = L.LLC_Y + L.LLC_H;   // 360
+L.NIC_CY = L.NIC_Y + L.NIC_H/2;  // 205
+
+// Predefined packet buffer positions (absolute SVG): 2 rows
+// Inner LLC region: x=292..878 (width=586), gap=(586-4*118)/3=38px
+const PKT_POSITIONS = {
+  4: [
+    {x:448,y:96},{x:604,y:96},
+    {x:448,y:134},{x:604,y:134}
+  ],
+  8: [
+    {x:292,y:96},{x:448,y:96},{x:604,y:96},{x:760,y:96},
+    {x:292,y:134},{x:448,y:134},{x:604,y:134},{x:760,y:134}
+  ]
+};
+const BUF_SIZE_BYTES = 2048; // 2 KB packet buffers
+
+// ================================================================
+// SIMULATOR STATE
+// ================================================================
+let S, EQ, animRafId=null, animWall=null, animSimBase=null, pendingTimeouts=new Set();
+
+function makeState() {
+  const n = 8;
+  const pipeSize = 320; // 20 KiB / 64 B per cell
+  return {
+    time: 0, n,
+    // --- Packetized ---
+    descRing: Array(n).fill(null),   // {bufId, itemId, fmt} | null
+    descHead: 0, descTail: 0,
+    pktBufs: Array(n).fill(null),    // {itemId, fmt} | null
+    freeBufs: new Set([...Array(n).keys()]),
+    // --- Ensō ---
+    notifBuf: Array(n).fill(null),   // {itemId, pointsTo} | null
+    notifHead: 0, notifTail: 0,
+    ensoPipe: Array(pipeSize).fill(null), // {itemId, cellIdx, totalCells, fmt, arrived}
+    pipeHead: 0, pipeTail: 0,
+    lastNotifPointsTo: -1,
+    prefetchReady: new Set(),
+    // --- Cache state (which LLC level items are in) ---
+    cacheLevel: {},                  // key→'llc'|'l2'|'l1'
+    // --- Animations ---
+    journeys: [],                    // packet journey objects
+    cacheAnims: [],                  // {itemId, phase, startWall, phases[]}
+    // --- Stats ---
+    rx:0, dropped:0, tx:0, pcieData:0, pcieTotal:0,
+    totalConsumed:0, l1Consumed:0,
+    nextId: 0,
+  };
+}
+
+// ================================================================
+// MIN HEAP
+// ================================================================
+class MinHeap {
+  constructor(){this.h=[]}
+  push(v){this.h.push(v);this._up(this.h.length-1)}
+  pop(){const t=this.h[0],l=this.h.pop();if(this.h.length){this.h[0]=l;this._dn(0)}return t}
+  peek(){return this.h[0]}
+  get size(){return this.h.length}
+  _up(i){while(i>0){const p=(i-1)>>1;if(this.h[p].t<=this.h[i].t)break;[this.h[p],this.h[i]]=[this.h[i],this.h[p]];i=p}}
+  _dn(i){while(true){let m=i,l=2*i+1,r=2*i+2;if(l<this.h.length&&this.h[l].t<this.h[m].t)m=l;if(r<this.h.length&&this.h[r].t<this.h[m].t)m=r;if(m===i)break;[this.h[m],this.h[i]]=[this.h[i],this.h[m]];i=m}}
+}
+
+// ================================================================
+// TIMING
+// ================================================================
+const NS = {PCIE_LAT:1000, PCIE_BW:16, LLC:14, L2:4, L1:1, PCIE_RT:2200};
+const FMT_SIZE = {desc:41, notif:64}; // protocol metadata (fixed) (the overhead of the descriptor is based on empirical measurements and includes per-packet descriptor + buffer posting and completions)
+const FMT_DEFAULTS = {packet:64, message:512, bytestream:256};
+const FMT_MAX = {packet:1518, message:10240, bytestream:10240};
+let fmtSizes = {...FMT_DEFAULTS}; // user-configurable, persists across resets
+
+function formatBytes(n){
+  if(n>=1024) return (n/1024).toFixed(n%1024===0?0:1)+' KiB';
+  return n+' B';
+}
+function pcieNs(bytes){return NS.PCIE_LAT + bytes/NS.PCIE_BW}
+function cacheNs(lv){return {llc:NS.LLC,l2:NS.L2,l1:NS.L1}[lv]||NS.LLC}
+function fmtSize(fmt){return fmtSizes[fmt]||FMT_DEFAULTS[fmt]||64}
+function fmtCells(fmt){return Math.max(1,Math.ceil(fmtSize(fmt)/64))}
+function pipeUsed(){
+  const sz=S.ensoPipe.length;
+  if(S.pipeTail>=S.pipeHead)return S.pipeTail-S.pipeHead;
+  return sz-S.pipeHead+S.pipeTail;
+}
+function pipeIsFull(extraCells){
+  return pipeUsed() + extraCells >= S.ensoPipe.length;
+}
+function freeDescSlots(){
+  return S.n - (S.descTail - S.descHead + S.n) % S.n;
+}
+
+// ================================================================
+// RECEIVE
+// ================================================================
+function actionReceive(){
+  syncToNow();
+  if(getIface()==='packetized') receivePacketized();
+  else receiveEnso();
+  render(); updateUI();
+  startAnimLoop();
+}
+
+function receivePacketized(){
+  const fmt=getFmt(), sz=fmtSize(fmt);
+  const numBufs=Math.ceil(sz/BUF_SIZE_BYTES);
+  if(S.freeBufs.size<numBufs){
+    S.dropped++;
+    setStatus(`<span style="color:#dc2626">⚠ Dropped</span> — need ${numBufs} buffer${numBufs>1?'s':''}, only ${S.freeBufs.size} free.`);
+    return;
+  }
+  if(freeDescSlots()<numBufs){
+    S.dropped++;
+    setStatus(`<span style="color:#dc2626">⚠ Dropped</span> — descriptor ring full. Consume first.`);
+    return;
+  }
+  const id=S.nextId++;
+  const bufIds=[...S.freeBufs].slice(0,numBufs);
+  bufIds.forEach(b=>S.freeBufs.delete(b));
+  S.rx++;
+  S.pcieData+=sz;
+  S.pcieTotal+=sz+numBufs*(FMT_SIZE.desc);
+  let tCursor=S.time;
+  for(let part=0;part<numBufs;part++){
+    const bufId=bufIds[part];
+    const chunkSz=part<numBufs-1?BUF_SIZE_BYTES:sz-(numBufs-1)*BUF_SIZE_BYTES;
+    const dt=tCursor+pcieNs(chunkSz);
+    const di=(S.descTail+part)%S.n;
+    const mt=dt+pcieNs(FMT_SIZE.desc);
+    EQ.push({t:dt,type:'pkt_arrive',bufId,id,fmt,partNum:part+1,totalParts:numBufs,chunkSz});
+    EQ.push({t:mt,type:'desc_arrive',bufId,id,di,fmt,partNum:part+1,totalParts:numBufs,chunkSz,origSz:sz});
+    const pos=getPktBufPos(bufId);
+    const fillW=Math.max(8,Math.round(chunkSz/BUF_SIZE_BYTES*L.PKT_W));
+    addJourney('data',fmt,tCursor,dt,pos.x+fillW/2,pos.y+L.PKT_H/2,fillW,L.PKT_H);
+    addJourney('meta','desc',dt,mt,descCellCX(di),L.RING_Y+L.RING_H/2,L.CW,L.RING_H);
+    tCursor=dt;
+  }
+  S.descTail=(S.descTail+numBufs)%S.n;
+  const splitNote=numBufs>1?` → split across ${numBufs} × ${formatBytes(BUF_SIZE_BYTES)} buffers`:'';
+  setStatus(`Receiving ${fmt} (${formatBytes(sz)})${splitNote}.`);
+}
+
+function receiveEnso(){
+  const fmt=getFmt(), sz=fmtSize(fmt);
+  const cells=fmtCells(fmt);
+  if(pipeIsFull(cells)){
+    S.dropped++;
+    setStatus(`<span style="color:#dc2626">⚠ Packet dropped</span> — Ensō pipe full (${pipeUsed()}/${S.ensoPipe.length} cells used).`);
+    return;
+  }
+  const wasEmpty=pipeUsed()===0;
+  const id=S.nextId++;
+  const startCell=S.pipeTail;
+  for(let i=0;i<cells;i++){
+    S.ensoPipe[(S.pipeTail+i)%S.ensoPipe.length]={itemId:id,cellIdx:i,totalCells:cells,fmt,arrived:false,sz:i===0?sz:0};
+  }
+  S.pipeTail=(S.pipeTail+cells)%S.ensoPipe.length;
+  const dt=S.time+pcieNs(sz);
+  S.rx++; S.pcieData+=sz; S.pcieTotal+=sz;
+  EQ.push({t:dt,type:'enso_data_arrive',id,startCell,cells,fmt});
+  // Journey: NIC → PCIe → pipe region
+  const pipeX=pipeCellX(startCell);
+  const segW=Math.max(8,Math.round(cells/S.ensoPipe.length*pipeBarW()));
+  addJourney('data',fmt,S.time,dt,pipeX+segW/2,L.PIPE_Y+L.PIPE_H/2,segW,L.PIPE_H);
+  if(wasEmpty){
+    const mt=dt+pcieNs(FMT_SIZE.notif);
+    const ni=S.notifTail;
+    S.notifTail=(S.notifTail+1)%S.n;
+    const pt=(S.pipeTail-1+S.ensoPipe.length)%S.ensoPipe.length;
+    S.lastNotifPointsTo=pt;
+    S.pcieTotal+=FMT_SIZE.notif;
+    EQ.push({t:mt,type:'notif_arrive',id,ni,pointsTo:pt});
+    addJourney('meta','notif',dt,mt,descCellCX(ni),L.RING_Y+L.RING_H/2,L.CW,L.RING_H);
+    setStatus(`Receiving ${fmt} (${formatBytes(sz)}) → Ensō pipe. Notification sent (pipe was empty).`);
+  } else {
+    setStatus(`Receiving ${fmt} (${formatBytes(sz)}) → Ensō pipe. Notification suppressed (pipe non-empty).`);
+  }
+}
+
+// ================================================================
+// CONSUME
+// ================================================================
+function actionConsume(){
+  syncToNow();
+  if(getIface()==='packetized') consumePacketized();
+  else consumeEnso();
+  render(); updateUI();
+  startAnimLoop();
+}
+
+function consumePacketized(){
+  const desc=S.descRing[S.descHead];
+  if(!desc||!S.pktBufs[desc.bufId]) return;
+  const totalParts=desc.totalParts||1;
+
+  // Capture all part info before mutating state
+  const parts=[];
+  for(let i=0;i<totalParts;i++){
+    const di=(S.descHead+i)%S.n;
+    const d=S.descRing[di];
+    parts.push({di, bufId:d.bufId, lv:S.cacheLevel['p'+d.bufId]||'llc',
+      pos:getPktBufPos(d.bufId), origSz:d.origSz||fmtSize(d.fmt), fmt:d.fmt,
+      chunkSz:d.chunkSz||fmtSize(d.fmt)});
+  }
+
+  // Clear all descriptors and cache levels immediately — lv is already captured in parts[]
+  parts.forEach(p=>{
+    S.descRing[p.di]=null;
+    delete S.cacheLevel['d'+p.di];
+    delete S.cacheLevel['p'+p.bufId];
+  });
+  S.descHead=(S.descHead+totalParts)%S.n;
+  S.tx++;
+  // Each buffer part is a separate cache access
+  parts.forEach(p=>{S.totalConsumed++;if(p.lv==='l1')S.l1Consumed++;});
+
+  // Part 0: clear buffer now (shows on the render() call in actionConsume)
+  const clearPart=(p)=>{
+    S.pktBufs[p.bufId]=null;
+    S.freeBufs.add(p.bufId);
+    const fillW=Math.max(8,Math.round(p.chunkSz/BUF_SIZE_BYTES*L.PKT_W));
+    const cx=p.pos.x+fillW/2, cy=p.pos.y+L.PKT_H/2;
+    scheduleCacheFlow('p'+p.bufId, p.lv, {cx,cy}, fillW, L.PKT_H, COLOR[p.fmt]||'#2563eb');
+  };
+  clearPart(parts[0]);
+
+  // Parts 1+: clear after the previous part's cache animation finishes
+  let wallDelay=cacheFlowDuration(parts[0].lv);
+  for(let i=1;i<parts.length;i++){
+    const p=parts[i], delay=wallDelay;
+    const tid=setTimeout(()=>{
+      pendingTimeouts.delete(tid);
+      clearPart(p); render(); updateUI(); startAnimLoop();
+    }, delay);
+    pendingTimeouts.add(tid);
+    wallDelay+=cacheFlowDuration(p.lv);
+  }
+
+  const splitStr=totalParts>1?` across ${totalParts} buffers`:'';
+  setStatus(`Consuming ${parts[0].fmt} (${formatBytes(parts[0].origSz)}${splitStr}) from ${parts[0].lv.toUpperCase()}.`);
+}
+
+function consumeEnso(){
+  const notif=S.notifBuf[S.notifHead];
+  if(!notif) return;
+  const firstCell=S.ensoPipe[S.pipeHead];
+  if(!firstCell||!firstCell.arrived) return;
+  const targetId=firstCell.itemId;
+  const cells=firstCell.totalCells;
+  const lv=S.prefetchReady.has(targetId)?'l1':(S.cacheLevel['e'+targetId]||'llc');
+  const ns=cacheNs(lv);
+  const ni=S.notifHead;
+  const oldHead=S.pipeHead;
+  const ps=S.ensoPipe.length;
+  // Clear data immediately — visible on next render
+  for(let i=0;i<cells;i++) S.ensoPipe[(oldHead+i)%ps]=null;
+  S.pipeHead=(oldHead+cells)%ps;
+  delete S.cacheLevel['e'+targetId];
+  S.prefetchReady.delete(targetId);
+  S.tx++;
+  // Entire message is one access — Ensō advantage
+  S.totalConsumed++;
+  if(lv==='l1') S.l1Consumed++;
+  // Cache flow animation
+  const eSegW=Math.max(8,Math.round(cells/S.ensoPipe.length*pipeBarW()));
+  const eCX=pipeCellX(oldHead)+eSegW/2, eCY=L.PIPE_Y+L.PIPE_H/2;
+  scheduleCacheFlow('e'+targetId, lv, {cx:eCX,cy:eCY}, eSegW, L.PIPE_H, COLOR[firstCell.fmt]||'#2563eb');
+  // Notification: only update when tail has moved (new data arrived) or pipe is now empty
+  const curTail=(S.pipeTail-1+ps)%ps;
+  if(pipeUsed()===0){
+    // Pipe empty — consume the notification
+    S.notifBuf[ni]=null;
+    S.notifHead=(S.notifHead+1)%S.n;
+  } else if(curTail!==S.lastNotifPointsTo){
+    // New data arrived since last notification — send updated one
+    S.notifBuf[ni]=null;
+    S.notifHead=(S.notifHead+1)%S.n;
+    const newNi=S.notifTail;
+    S.notifTail=(S.notifTail+1)%S.n;
+    S.lastNotifPointsTo=curTail;
+    const nextItemId=S.ensoPipe[S.pipeHead]?.itemId;
+    const mt=S.time+pcieNs(FMT_SIZE.notif);
+    S.pcieTotal+=FMT_SIZE.notif;
+    EQ.push({t:mt,type:'notif_arrive',id:nextItemId,ni:newNi,pointsTo:curTail});
+    addJourney('meta','notif',S.time,mt,descCellCX(newNi),L.RING_Y+L.RING_H/2,L.CW,L.RING_H);
+  }
+  // else: tail unchanged — keep existing notification, no duplicate needed
+  // Prefetch next item if available
+  const nextCell=S.ensoPipe[S.pipeHead];
+  if(nextCell&&nextCell.arrived&&!S.prefetchReady.has(nextCell.itemId)){
+    EQ.push({t:S.time+ns+NS.L1,type:'prefetch',nextId:nextCell.itemId});
+    setStatus(`Consuming (from ${lv.toUpperCase()}, ~${ns}ns). Stream prefetcher loading next item → L1d.`);
+  } else {
+    setStatus(`Consuming (from ${lv.toUpperCase()}${lv==='l1'?' via prefetch':''}, ~${ns}ns).`);
+  }
+}
+
+// ================================================================
+// EVENTS
+// ================================================================
+function processEvent(ev){
+  S.time=Math.max(S.time,ev.t);
+  switch(ev.type){
+    case 'pkt_arrive':
+      S.pktBufs[ev.bufId]={itemId:ev.id,fmt:ev.fmt,partNum:ev.partNum||1,totalParts:ev.totalParts||1,chunkSz:ev.chunkSz||fmtSize(ev.fmt)};
+      S.cacheLevel['p'+ev.bufId]='llc';
+      break;
+    case 'desc_arrive':
+      S.descRing[ev.di]={bufId:ev.bufId,itemId:ev.id,fmt:ev.fmt,partNum:ev.partNum||1,totalParts:ev.totalParts||1,chunkSz:ev.chunkSz||fmtSize(ev.fmt),origSz:ev.origSz||fmtSize(ev.fmt)};
+      S.cacheLevel['d'+ev.di]='llc';
+      break;
+    case 'enso_data_arrive':
+      for(let i=0;i<ev.cells;i++){
+        const c=(ev.startCell+i)%S.ensoPipe.length;
+        if(S.ensoPipe[c]) S.ensoPipe[c].arrived=true;
+      }
+      S.cacheLevel['e'+ev.id]='llc';
+      break;
+    case 'notif_arrive':
+      S.notifBuf[ev.ni]={itemId:ev.id,pointsTo:ev.pointsTo};
+      break;
+    case 'prefetch':
+      S.cacheLevel['e'+ev.nextId]='l1';
+      S.prefetchReady.add(ev.nextId);
+      break;
+  }
+}
+
+// ================================================================
+// JOURNEY ANIMATION (NIC → PCIe → buffer/pipe)
+// ================================================================
+const COLOR = {packet:'#2563eb',message:'#9333ea',bytestream:'#0891b2',desc:'#d97706',notif:'#d97706'};
+
+function addJourney(type, fmt, startNs, endNs, dstX, dstY, w=16, h=14){
+  const midX=L.PC_X2, midY=L.PC_Y;
+  const ph1End=startNs+Math.min((endNs-startNs)*0.5, NS.PCIE_LAT);
+  S.journeys.push({
+    type, fmt, startNs, endNs,
+    p1:{sx:L.NIC_X+L.NIC_W, sy:L.PC_Y, ex:midX, ey:midY, t0:startNs, t1:ph1End},
+    p2:{sx:midX, sy:midY, ex:dstX, ey:dstY, t0:ph1End, t1:endNs},
+    color:COLOR[fmt]||'#2563eb', w, h,
+    el:null, done:false
+  });
+}
+
+function easeInOut(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
+
+// ================================================================
+// CACHE FLOW ANIMATION
+// ================================================================
+// CACHE_DUR[level] = wall-clock ms for data to transfer from that cache level to the next.
+// Proportional to modern server CPU latencies: LLC≈14ns, L2≈4ns, L1≈1ns (×60ms/ns → 840:240:60).
+// 'cpu' = how long the rect lingers at CPU before disappearing.
+const CACHE_DUR={llc:840,l2:240,l1:60,cpu:280};
+
+function cacheFlowDuration(fromLevel){
+  const levels=['llc','l2','l1','cpu'];
+  return levels.slice(levels.indexOf(fromLevel)).reduce((s,lv)=>s+(CACHE_DUR[lv]||300),0);
+}
+
+function buildCacheWaypoints(fromLevel, srcPos, sc){
+  const startX=srcPos.cx!==undefined?srcPos.cx:srcPos.x;
+  const startY=srcPos.cy!==undefined?srcPos.cy:srcPos.y;
+  const cpuBoxY=sc?L.L1_Y+L.L1_H+8:L.LLC_Y+L.LLC_H+8;
+  const cpuCX=L.LLC_X+L.LLC_W/2, cpuCY=cpuBoxY+L.CPU_H/2;
+  if(!sc){
+    const tot=cacheFlowDuration(fromLevel);
+    return [{x:startX,y:startY,cumMs:0},{x:cpuCX,y:cpuCY,cumMs:tot-CACHE_DUR.cpu},{x:cpuCX,y:cpuCY,cumMs:tot}];
+  }
+  const levels=['llc','l2','l1'];
+  const fromIdx=levels.indexOf(fromLevel);
+  if(fromIdx<0) return [];
+  const lc={
+    l2:{x:cpuCX,y:L.L2_Y+L.L2_H/2},
+    l1:{x:cpuCX,y:L.L1_Y+L.L1_H/2},
+  };
+  const cpu={x:cpuCX,y:cpuCY};
+  let pts=[{x:startX,y:startY,cumMs:0}], cumMs=0;
+  if(fromIdx===0){cumMs+=CACHE_DUR.llc;pts.push({...lc.l2,cumMs});}
+  if(fromIdx<=1){cumMs+=CACHE_DUR.l2;pts.push({...lc.l1,cumMs});}
+  cumMs+=CACHE_DUR.l1;pts.push({...cpu,cumMs});
+  cumMs+=CACHE_DUR.cpu;pts.push({...cpu,cumMs});
+  return pts;
+}
+
+function scheduleCacheFlow(key, fromLevel, srcPos, rectW=16, rectH=14, color='#2563eb'){
+  const waypoints=buildCacheWaypoints(fromLevel,srcPos,showCache());
+  if(!waypoints.length) return;
+  S.cacheAnims.push({key,waypoints,startWall:null,el:null,w:rectW,h:rectH,color,lastSi:-1});
+}
+
+// ================================================================
+// ANIMATION LOOP
+// ================================================================
+function startAnimLoop(){
+  if(animRafId) return;
+  animWall=performance.now();
+  animSimBase=S.time;
+  animLoop();
+}
+
+// Between rAF ticks, S.time lags behind the simulator's "now" (animSimBase + elapsed*speed).
+// Call this before scheduling new events so they're anchored to the user's real "now",
+// not to the last processed event. Without this, journeys started during ongoing animation
+// get startNs in the past and visually skip ahead.
+function syncToNow(){
+  if(animRafId===null) return; // no loop running → S.time is already current
+  const simNow=animSimBase+(performance.now()-animWall)*getSpeed();
+  while(EQ.size>0&&EQ.peek().t<=simNow){processEvent(EQ.pop());}
+  if(S.time<simNow) S.time=simNow;
+}
+
+function animLoop(){
+  const now=performance.now();
+  const elapsed=now-animWall;
+  const speed=getSpeed();
+  const simNow=animSimBase+elapsed*speed;
+
+  // Process due events
+  let changed=false;
+  while(EQ.size>0&&EQ.peek().t<=simNow){processEvent(EQ.pop());changed=true;}
+
+  // Animate journeys
+  const particleG=document.getElementById('g-pcie-particles');
+  const llcG=document.getElementById('g-llc-particles');
+  S.journeys=S.journeys.filter(j=>{
+    if(simNow<j.startNs) return true;
+    if(j.done) return false;
+    const total=j.endNs-j.startNs;
+    if(total<=0){j.done=true;if(j.el){j.el.remove();j.el=null;}return false;}
+    // which phase?
+    const inP2=simNow>=j.p2.t0;
+    const ph=inP2?j.p2:j.p1;
+    const prog=Math.max(0,Math.min(1,(simNow-ph.t0)/(ph.t1-ph.t0)||0));
+    const ep=easeInOut(prog);
+    const cx=ph.sx+(ph.ex-ph.sx)*ep;
+    const cy=ph.sy+(ph.ey-ph.sy)*ep;
+    const x=cx-j.w/2, y=cy-j.h/2;
+    // Switch parent layer when crossing into LLC
+    const shouldBeInLlc=inP2&&j.p2.ex>L.LLC_X;
+    const parent=shouldBeInLlc?llcG:particleG;
+    if(!j.el){
+      j.el=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      j.el.setAttribute('fill',j.color); j.el.setAttribute('rx',3);
+      j.el.setAttribute('opacity','0.92');
+      parent.appendChild(j.el);
+    } else if(j.el.parentNode!==parent){
+      parent.appendChild(j.el);
+    }
+    j.el.setAttribute('width',j.w); j.el.setAttribute('height',j.h);
+    j.el.setAttribute('x',x); j.el.setAttribute('y',y);
+    if(simNow>=j.endNs-10){
+      j.done=true; if(j.el){j.el.remove();j.el=null;} return false;
+    }
+    return true;
+  });
+
+  // Cache flow animations (wall-clock driven, waypoint interpolation)
+  const cacheG=document.getElementById('g-cache-flow');
+  const cacheHighlightG=document.getElementById('g-cache-highlight');
+  S.cacheAnims=S.cacheAnims.filter(ca=>{
+    if(!ca.startWall) ca.startWall=now;
+    const elapsed=now-ca.startWall;
+    const wps=ca.waypoints;
+    if(elapsed>=wps[wps.length-1].cumMs){if(ca.el){ca.el.remove();ca.el=null;}return false;}
+    // find current segment
+    let si=wps.length-2;
+    for(let i=0;i<wps.length-1;i++){if(elapsed<=wps[i+1].cumMs){si=i;break;}}
+    // flash cache box when rect arrives at a new waypoint
+    if(si>ca.lastSi){
+      const arrived=wps[si];
+      const sc=showCache();
+      const cpuBoxY=sc?L.L1_Y+L.L1_H+8:L.LLC_Y+L.LLC_H+8;
+      let bx=null,by=null,bh=null,bc=null;
+      if(sc&&Math.abs(arrived.y-(L.L2_Y+L.L2_H/2))<8){bx=L.LLC_X;by=L.L2_Y;bh=L.L2_H;bc='#a8a29e';}
+      else if(sc&&Math.abs(arrived.y-(L.L1_Y+L.L1_H/2))<8){bx=L.LLC_X;by=L.L1_Y;bh=L.L1_H;bc='#78716c';}
+      else if(sc&&arrived.y>=cpuBoxY-2){bx=L.LLC_X;by=cpuBoxY;bh=L.CPU_H;bc='#d6d3d1';}
+      if(bx!==null){
+        const fr=document.createElementNS(NS2,'rect');
+        attrs(fr,{x:bx,y:by,width:L.LLC_W,height:bh,rx:'6',fill:bc});
+        fr.classList.add('cache-box-flash');
+        cacheHighlightG.appendChild(fr);
+        setTimeout(()=>fr.remove(),750);
+      }
+      ca.lastSi=si;
+    }
+    const w0=wps[si],w1=wps[si+1];
+    const segDur=w1.cumMs-w0.cumMs;
+    const t=segDur>0?Math.max(0,Math.min(1,(elapsed-w0.cumMs)/segDur)):1;
+    const ep=easeInOut(t);
+    const cx=w0.x+(w1.x-w0.x)*ep, cy=w0.y+(w1.y-w0.y)*ep;
+    if(!ca.el){
+      ca.el=document.createElementNS(NS2,'rect');
+      ca.el.setAttribute('rx','3');
+      ca.el.setAttribute('opacity','0.88');
+      cacheG.appendChild(ca.el);
+    }
+    ca.el.setAttribute('fill',ca.color);
+    ca.el.setAttribute('width',ca.w); ca.el.setAttribute('height',ca.h);
+    ca.el.setAttribute('x',cx-ca.w/2); ca.el.setAttribute('y',cy-ca.h/2);
+    return true;
+  });
+
+  if(changed){render();updateUI();}
+  else updateJourneyUI();
+
+  const hasWork=S.journeys.length>0||EQ.size>0||S.cacheAnims.length>0;
+  if(hasWork) animRafId=requestAnimationFrame(animLoop);
+  else animRafId=null;
+}
+
+
+// ================================================================
+// RENDERING
+// ================================================================
+const NS2='http://www.w3.org/2000/svg';
+function el(tag){return document.createElementNS(NS2,tag)}
+function attrs(e,o){for(const[k,v]of Object.entries(o))e.setAttribute(k,v);return e}
+function rect(x,y,w,h,cls){return attrs(el('rect'),{x,y,width:w,height:h,class:cls||''})}
+function text(x,y,t,cls){const e=el('text');attrs(e,{x,y,class:cls||''});e.textContent=t;return e}
+function path(d,cls){return attrs(el('path'),{d,class:cls||'',fill:'none'})}
+
+function buildStaticDiagram(){
+  const g=document.getElementById('g-static'); g.innerHTML='';
+  const iface=getIface(), sc=showCache(), n=S.n;
+
+  // Fit viewBox tightly: top padding = bottom padding = 20px
+  const cpuBottom=(sc?L.L1_Y+L.L1_H+8:L.LLC_Y+L.LLC_H+8)+L.CPU_H;
+  const VB_TOP=30, VB_PAD=20;
+  document.getElementById('diagram').setAttribute('viewBox',`0 ${VB_TOP} 900 ${cpuBottom+VB_PAD-VB_TOP}`);
+
+  // NIC box
+  const nicR=rect(L.NIC_X,L.NIC_Y,L.NIC_W,L.NIC_H,'nic-box');
+  g.appendChild(nicR);
+  const nicName=iface==='enso'?'Ensō NIC':'Packetized NIC';
+  g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+16,nicName,'box-title box-title-nic'));
+  g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2-14,'DMA','section-label'));
+  g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2+14,'Engine','section-label'));
+
+  // PCIe arrow
+  const arr=el('line');
+  attrs(arr,{x1:L.PC_X1+4,y1:L.PC_Y,x2:L.PC_X2-4,y2:L.PC_Y,stroke:'#4f46e5','stroke-width':2,'marker-end':'url(#arr-pcie)'});
+  g.appendChild(arr);
+  g.appendChild(text((L.PC_X1+L.PC_X2)/2,L.PC_Y-10,'PCIe','pcie-label'));
+  attrs(document.getElementById('llc-clip-r'),{x:L.LLC_X,y:L.LLC_Y,width:L.LLC_W,height:L.LLC_H});
+
+  // Memory / Cache hierarchy
+  if(sc){
+    g.appendChild(rect(L.LLC_X,L.LLC_Y,L.LLC_W,L.LLC_H,'llc-box'));
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,L.LLC_Y+13,'LLC — Last Level Cache','box-title box-title-llc'));
+    g.appendChild(text(L.LLC_R-6,L.LLC_Y+L.L2_H/2,'~14 ns','lat-badge'));
+    g.appendChild(rect(L.LLC_X,L.L2_Y,L.LLC_W,L.L2_H,'l2-box'));
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,L.L2_Y+L.L2_H/2,'L2 Cache','box-title box-title-cache'));
+    g.appendChild(text(L.LLC_R-6,L.L2_Y+L.L2_H/2,'~4 ns','lat-badge'));
+    g.appendChild(rect(L.LLC_X,L.L1_Y,L.LLC_W,L.L1_H,'l1-box'));
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,L.L1_Y+L.L1_H/2,'L1d Cache','box-title box-title-l1'));
+    g.appendChild(text(L.LLC_R-6,L.L1_Y+L.L1_H/2,'~1 ns','lat-badge'));
+    const cpuY=L.L1_Y+L.L1_H+8;
+    const cpuR=rect(L.LLC_X,cpuY,L.LLC_W,L.CPU_H,'cpu-box');
+    g.appendChild(cpuR);
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,cpuY+L.CPU_H/2,'CPU Core','box-title box-title-cpu'));
+  } else {
+    g.appendChild(rect(L.LLC_X,L.LLC_Y,L.LLC_W,L.LLC_H,'mem-box'));
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,L.LLC_Y+13,'Host Memory','box-title box-title-mem'));
+    const cpuY=L.LLC_Y+L.LLC_H+8;
+    const cpuR=rect(L.LLC_X,cpuY,L.LLC_W,L.CPU_H,'cpu-box');
+    g.appendChild(cpuR);
+    g.appendChild(text(L.LLC_X+L.LLC_W/2,cpuY+L.CPU_H/2,'CPU Core','box-title box-title-cpu'));
+  }
+
+  // Ring/notif label: to the right of cells. Use inline style to override CSS text-anchor:middle.
+  {
+    const total=S.n*(L.CW+L.CGAP)-L.CGAP;
+    const lx=L.LLC_X+12+total+16;  // 16px gap after last cell's right edge
+    const cy=L.RING_Y+L.RING_H/2;
+    const startStyle='text-anchor:start;dominant-baseline:middle';
+    if(iface==='packetized'){
+      const t1=text(lx,cy,'Descriptor Ring Buffer','section-label');
+      t1.setAttribute('style',startStyle); g.appendChild(t1);
+      // const t2=text(lx,cy+9,'Buffer','section-label');
+      // t2.setAttribute('style',startStyle); g.appendChild(t2);
+    } else {
+      const t=text(lx,cy,'Notification Buffer','section-label');
+      t.setAttribute('style',startStyle); g.appendChild(t);
+    }
+  }
+
+
+  // Dashed separator above ring buffer
+  const sep=el('line');
+  attrs(sep,{x1:L.LLC_X+12,y1:L.RING_Y-6,x2:L.LLC_R-12,y2:L.RING_Y-6,stroke:'#d6d3d1','stroke-width':1,'stroke-dasharray':'5,3'});
+  g.appendChild(sep);
+}
+
+// X center of descriptor/notif cell i
+function descCellCX(i){
+  const sx=L.LLC_X+12; // left-aligned to make room for label on right
+  return sx+i*(L.CW+L.CGAP)+L.CW/2;
+}
+function descCellLX(i){return descCellCX(i)-L.CW/2;}
+
+// Packet buffer position
+function getPktBufPos(i){
+  const key=String(S.n) in PKT_POSITIONS?S.n:8;
+  return PKT_POSITIONS[key][i]||{x:295+i*70,y:80};
+}
+
+// X position in Ensō pipe bar for pipe cell index
+function pipeCellX(cellIdx){
+  const pipeSize=S.ensoPipe.length;
+  const barX=L.LLC_X+20, barW=L.LLC_W-40;
+  return barX+cellIdx/pipeSize*barW;
+}
+function pipeBarX(){return L.LLC_X+20;}
+function pipeBarW(){return L.LLC_W-40;}
+
+function render(){
+  renderCells();
+  renderArrows();
+  renderPointers();
+}
+
+function renderCells(){
+  const g=document.getElementById('g-cells'); g.innerHTML='';
+  const iface=getIface(), n=S.n;
+
+  if(iface==='packetized'){
+    // Packet buffers (scattered)
+    for(let i=0;i<n;i++){
+      const pos=getPktBufPos(i);
+      const pkt=S.pktBufs[i];
+      const lv=S.cacheLevel['p'+i];
+      // Outer buffer rect
+      const bg=rect(pos.x,pos.y,L.PKT_W,L.PKT_H,'pkt-buf-bg');
+      if(lv==='l1') bg.setAttribute('filter','url(#glow-f)');
+      g.appendChild(bg);
+      if(pkt){
+        const fillW=Math.max(8,Math.round(pkt.chunkSz/BUF_SIZE_BYTES*L.PKT_W));
+        const fillCls='pkt-buf-fill-'+pkt.fmt;
+        const rf=rect(pos.x,pos.y,fillW,L.PKT_H,fillCls);
+        rf.setAttribute('rx','5'); g.appendChild(rf);
+        if(fillW>=60){
+          const fmtShort={packet:'Pkt',message:'Msg',bytestream:'BS'}[pkt.fmt]||'?';
+          const lbl=pkt.totalParts>1
+            ?`${fmtShort} ${pkt.partNum}/${pkt.totalParts}`
+            :`${fmtShort} buf${i}`;
+          g.appendChild(text(pos.x+fillW/2,pos.y+L.PKT_H/2,lbl,'pkt-buf-label'));
+        }
+      } else {
+        const et=text(pos.x+L.PKT_W/2,pos.y+L.PKT_H/2,'Packet Buffer','cell-idx');
+        et.setAttribute('style','font-size:13px');
+        g.appendChild(et);
+      }
+    }
+    // Descriptor ring cells
+    for(let i=0;i<n;i++){
+      const x=descCellLX(i), y=L.RING_Y;
+      const desc=S.descRing[i];
+      const cls=desc?'cell-desc':'cell-empty';
+      g.appendChild(rect(x,y,L.CW,L.RING_H,cls));
+      if(desc){
+        const lbl=desc.totalParts>1?`${desc.partNum}/${desc.totalParts}`:`D${desc.bufId}`;
+        g.appendChild(text(x+L.CW/2,y+L.RING_H/2,lbl,'cell-label'));
+      } else {
+        g.appendChild(text(x+L.CW/2,y+L.RING_H/2,`${i}`,'cell-idx'));
+      }
+    }
+  } else {
+    // Ensō: pipe bar
+    const bx=pipeBarX(), bw=pipeBarW(), by=L.PIPE_Y, bh=L.PIPE_H;
+    const pipeSize=S.ensoPipe.length;
+    // Background
+    g.appendChild(rect(bx,by,bw,bh,'pipe-bg'));
+    // Background label — drawn after bg rect but before fills, so data covers it
+    g.appendChild(text(bx+bw-8,by+bh/2,'Ensō Pipe','pipe-bg-label'));
+    // Fill regions — scan for contiguous filled segments
+    const drawSeg=(start,end,fmt)=>{
+      if(start<0||start===end) return;
+      const x1=bx+start/pipeSize*bw;
+      const x2=bx+end/pipeSize*bw;
+      const color=COLOR[fmt]||'#2563eb';
+      const sr=rect(x1,by,x2-x1,bh);
+      sr.setAttribute('fill',color);sr.setAttribute('rx','0');
+      if(start===0) sr.setAttribute('rx','4');
+      g.appendChild(sr);
+    };
+    // Walk cells and draw filled regions, also draw message labels
+    // We need to handle ring-buffer wraparound for display
+    // Simple approach: always draw from index 0..pipeSize-1
+    let prevFmt=null, runStart=-1;
+    for(let i=0;i<pipeSize;i++){
+      const c=S.ensoPipe[i];
+      const arrived=c&&c.arrived;
+      const f=arrived?c.fmt:null;
+      if(f!==prevFmt){
+        if(prevFmt!==null) drawSeg(runStart,i,prevFmt);
+        runStart=i; prevFmt=f;
+      }
+    }
+    if(prevFmt!==null) drawSeg(runStart,pipeSize,prevFmt);
+    // Draw pending (not-yet-arrived) regions
+    for(let i=0;i<pipeSize;i++){
+      const c=S.ensoPipe[i];
+      if(c&&!c.arrived){
+        const x1=bx+i/pipeSize*bw, x2=bx+(i+1)/pipeSize*bw;
+        const pr=rect(x1,by,x2-x1,bh);
+        pr.setAttribute('fill','#c4b5fd');pr.setAttribute('rx','0');
+        g.appendChild(pr);
+      }
+    }
+    // Draw message boundary dividers and labels
+    let itemStart=-1, prevItemId=-1;
+    for(let i=0;i<pipeSize;i++){
+      const c=S.ensoPipe[i];
+      if(c&&c.cellIdx===0){
+        // start of new item
+        const x=bx+i/pipeSize*bw;
+        if(i>0){
+          const d=el('line');
+          attrs(d,{x1:x,y1:by+3,x2:x,y2:by+bh-3,class:'pipe-divider'});
+          g.appendChild(d);
+        }
+        // label in center of this item — only when segment is wide enough
+        const cells=c.totalCells;
+        const cx=bx+(i+cells/2)/pipeSize*bw;
+        const segPx=cells/pipeSize*bw;
+        if(c.arrived&&segPx>=30){
+          const fmtShort={packet:'Pkt',message:'Msg',bytestream:'BS'}[c.fmt]||'?';
+          g.appendChild(text(cx,by+bh/2,`${fmtShort} ${c.itemId}`,'pipe-msg-label'));
+        }
+      }
+    }
+    // Border on top
+    g.appendChild(rect(bx,by,bw,bh,'pipe-border'));
+
+    // Notification buffer cells
+    for(let i=0;i<n;i++){
+      const x=descCellLX(i), y=L.RING_Y;
+      const notif=S.notifBuf[i];
+      const cls=notif?'cell-notif':'cell-empty';
+      g.appendChild(rect(x,y,L.CW,L.RING_H,cls));
+      if(notif){
+        g.appendChild(text(x+L.CW/2,y+L.RING_H/2,`N${i}`,'cell-label'));
+      } else {
+        g.appendChild(text(x+L.CW/2,y+L.RING_H/2,`${i}`,'cell-idx'));
+      }
+    }
+  }
+}
+
+function renderArrows(){
+  const g=document.getElementById('g-arrows'); g.innerHTML='';
+  const iface=getIface(), n=S.n;
+
+  if(iface==='packetized'){
+    for(let i=0;i<n;i++){
+      const desc=S.descRing[i];
+      if(!desc) continue;
+      const x1=descCellCX(i), y1=L.RING_Y-1;
+      const pos=getPktBufPos(desc.bufId);
+      const x2=pos.x+L.PKT_W/2, y2=pos.y+L.PKT_H;
+      // Quadratic bezier with a single midpoint control: the tangent at the endpoint
+      // naturally matches the line's apparent direction, so the arrowhead stays attached
+      // to the curve body instead of pointing rigidly upward.
+      const mx=(x1+x2)/2, my=(y1+y2)/2-20;
+      const p=path(`M${x1},${y1} Q${mx},${my} ${x2},${y2}`,'desc-arrow');
+      p.setAttribute('marker-end','url(#arr-gray)');
+      g.appendChild(p);
+    }
+  } else {
+    const pipeSize=S.ensoPipe.length;
+    const bx=pipeBarX(), bw=pipeBarW();
+    // The "tail" notification is the one with the largest pointsTo value (most recent tail)
+    let tailNotifIdx=-1, maxPT=-1;
+    for(let i=0;i<n;i++){
+      const notif=S.notifBuf[i];
+      if(!notif) continue;
+      if(notif.pointsTo>maxPT){maxPT=notif.pointsTo;tailNotifIdx=i;}
+    }
+    for(let i=0;i<n;i++){
+      const notif=S.notifBuf[i];
+      if(!notif) continue;
+      const x1=descCellCX(i), y1=L.RING_Y-1;
+      const pt=notif.pointsTo;
+      const x2=bx+(pt+0.5)/pipeSize*bw;
+      const y2=L.PIPE_Y+L.PIPE_H;
+      const midy=(y1+y2)/2;
+      const isTail=(i===tailNotifIdx);
+      const cls=isTail?'tail-arrow':'notif-arrow';
+      const markerUrl=isTail?'url(#arr-cyan)':'url(#arr-orange)';
+      const p=path(`M${x1},${y1} C${x1},${midy} ${x2},${midy} ${x2},${y2}`,cls);
+      p.setAttribute('marker-end',markerUrl);
+      g.appendChild(p);
+      if(isTail){
+        g.appendChild(text(x2,y2+20,'Tail','tail-label'));
+      }
+    }
+  }
+}
+
+function renderPointers(){
+  const g=document.getElementById('g-pointers'); g.innerHTML='';
+  const iface=getIface(), n=S.n;
+
+  // Pointer above a buffer: tip touches topY, label sits above the triangle
+  const ptrHead=(x,topY,label)=>{
+    const tip=topY-1;
+    g.appendChild(attrs(el('polygon'),{points:`${x-4},${tip-8} ${x+4},${tip-8} ${x},${tip}`,class:'ptr-down'}));
+    const t=text(x,tip-12,label,'head-label'); t.setAttribute('text-anchor','middle'); g.appendChild(t);
+  };
+  // Pointer below a buffer: tip touches botY, label sits below the triangle
+  const ptrTail=(x,botY,label)=>{
+    const tip=botY+1;
+    g.appendChild(attrs(el('polygon'),{points:`${x-4},${tip+8} ${x+4},${tip+8} ${x},${tip}`,class:'ptr-up'}));
+    const t=text(x,tip+22,label,'tail-label'); t.setAttribute('text-anchor','middle'); g.appendChild(t);
+  };
+
+  if(iface==='packetized'){
+    ptrHead(descCellCX(S.descHead), L.RING_Y, 'Head');
+    ptrTail(descCellCX(S.descTail%n), L.RING_Y+L.RING_H, 'Tail');
+  } else {
+    // Notification buffer
+    ptrHead(descCellCX(S.notifHead), L.RING_Y, 'Head');
+    ptrTail(descCellCX(S.notifTail%n), L.RING_Y+L.RING_H, 'Tail');
+    // Ensō pipe
+    const bx=pipeBarX(), bw=pipeBarW(), pipeSize=S.ensoPipe.length;
+    const hx=bx+S.pipeHead/pipeSize*bw;
+    ptrHead(hx, L.PIPE_Y, 'Head');
+    // Tail is shown via the colored notification arrow; only fall back to a pointer when
+    // no notification exists (pipe empty, so tail == head position)
+    const hasNotif=S.notifBuf.some(x=>x!==null);
+    if(!hasNotif) ptrTail(hx, L.PIPE_Y+L.PIPE_H, 'Tail');
+  }
+}
+
+function updateJourneyUI(){/* light version */}
+
+// ================================================================
+// HELPERS / UI
+// ================================================================
+function getIface(){return document.getElementById('cfg-iface').value}
+function getFmt(){return document.getElementById('cfg-format').value}
+function getSpeed(){return parseFloat(document.getElementById('cfg-speed').value)}
+function showCache(){return document.getElementById('cfg-cache').checked}
+
+function canConsume(){
+  if(getIface()==='packetized'){
+    const desc=S.descRing[S.descHead];
+    if(!desc||!S.pktBufs[desc.bufId]) return false;
+    // All parts of a multi-buffer message must have arrived
+    const totalParts=desc.totalParts||1;
+    for(let i=1;i<totalParts;i++){
+      const d=S.descRing[(S.descHead+i)%S.n];
+      if(!d||!S.pktBufs[d.bufId]) return false;
+    }
+    return true;
+  }
+  const cell=S.ensoPipe[S.pipeHead];
+  return cell?.arrived===true&&S.notifBuf[S.notifHead]!==null;
+}
+
+function canReceive(){
+  if(getIface()==='packetized'){
+    const nb=Math.ceil(fmtSize(getFmt())/BUF_SIZE_BYTES);
+    return S.freeBufs.size>=nb&&freeDescSlots()>=nb;
+  }
+  return !pipeIsFull(fmtCells(getFmt()));
+}
+
+function updateUI(){
+  const pct=S.pcieTotal>0?Math.round(S.pcieData/S.pcieTotal*100)+'%':'—';
+  document.getElementById('s-pcie').textContent=pct;
+  const l1pct=S.totalConsumed>0?Math.round(S.l1Consumed/S.totalConsumed*100)+'%':'—';
+  document.getElementById('s-lat').textContent=l1pct;
+  document.getElementById('btn-consume').disabled=isAutoPlaying||!canConsume();
+  document.getElementById('btn-receive').disabled=isAutoPlaying||!canReceive();
+}
+
+function setStatus(msg){
+  document.getElementById('statusbar-text').innerHTML=msg;
+  document.getElementById('statusbar').classList.toggle('warn',/Dropped|⚠/.test(msg));
+}
+
+function resetSim(){
+  if(animRafId){cancelAnimationFrame(animRafId);animRafId=null;}
+  pendingTimeouts.forEach(id=>clearTimeout(id)); pendingTimeouts.clear();
+  clearPlayTimeouts();
+  document.getElementById('g-pcie-particles').innerHTML='';
+  document.getElementById('g-llc-particles').innerHTML='';
+  document.getElementById('g-cache-flow').innerHTML='';
+  document.getElementById('g-cache-highlight').innerHTML='';
+  S=makeState(); EQ=new MinHeap();
+  buildStaticDiagram(); render(); updateUI();
+  setStatus('Simulator reset. Press <strong>Receive</strong> to simulate incoming data.');
+}
+
+// -------- Auto-play sequence (URL: ?play=r,500,m=Watch this,500,m=,c) --------
+// Tokens: r/R = receive, c/C = consume, m=<text> = show banner with text,
+// m= (empty) = hide banner, integer = wait in ms.
+// We read the raw query string (no auto-decoding) so that %2C inside a message
+// is preserved as a literal comma and isn't treated as a token separator.
+// Use ?play=m=Hello%2C+world,500 to get a banner reading "Hello, world".
+const playSeq=(function(){
+  const search=location.search.replace(/^\?/,'');
+  let raw=null;
+  for(const part of search.split('&')){
+    const eq=part.indexOf('=');
+    if(eq>=0 && part.slice(0,eq)==='play'){raw=part.slice(eq+1);break;}
+  }
+  if(raw===null) return [];
+  return raw.split(',').map(s=>{
+    try{return decodeURIComponent(s.trim());}catch(e){return s.trim();}
+  }).filter(Boolean).map(t=>{
+    if(/^\d+$/.test(t)) return {wait:parseInt(t,10)};
+    if(/^m=/i.test(t)) return {message:t.slice(2)};
+    const a=t.toLowerCase();
+    if(a==='r'||a==='receive') return {action:'receive'};
+    if(a==='c'||a==='consume') return {action:'consume'};
+    return null;
+  }).filter(Boolean);
+})();
+let playTimeoutIds=[];
+let isAutoPlaying=false;
+let msgSwapTid=null;
+function clearMsgSwap(){if(msgSwapTid){clearTimeout(msgSwapTid);msgSwapTid=null;}}
+function showPlayMessage(msg){
+  const banner=document.getElementById('play-msg');
+  const txt=document.getElementById('play-msg-text');
+  // If the banner is already visible with different text, fade-swap to the new text.
+  if(banner.classList.contains('shown')&&txt.textContent&&txt.textContent!==msg){
+    clearMsgSwap();
+    txt.classList.add('swap-out');
+    msgSwapTid=setTimeout(()=>{
+      txt.textContent=msg;
+      txt.classList.remove('swap-out');
+      msgSwapTid=null;
+    },500);
+  } else {
+    clearMsgSwap();
+    txt.textContent=msg;
+    txt.classList.remove('swap-out');
+    banner.classList.add('shown');
+  }
+}
+function hidePlayMessage(){clearMsgSwap();document.getElementById('play-msg').classList.remove('shown')}
+function clearPlayTimeouts(){playTimeoutIds.forEach(clearTimeout);playTimeoutIds=[];isAutoPlaying=false;hidePlayMessage()}
+function runPlaySequence(){
+  clearPlayTimeouts();
+  if(!playSeq.length) return;
+  let cum=0;
+  for(const step of playSeq){
+    if(step.wait!==undefined){cum+=step.wait;continue}
+    if(step.message!==undefined){
+      const msg=step.message;
+      const tid=setTimeout(()=>{
+        if(msg) showPlayMessage(msg);
+        else hidePlayMessage();
+      }, cum);
+      playTimeoutIds.push(tid);
+      continue;
+    }
+    const action=step.action;
+    const tid=setTimeout(()=>{
+      if(action==='receive') actionReceive();
+      else actionConsume();
+    }, cum);
+    playTimeoutIds.push(tid);
+  }
+  // Release the lock at the END of the sequence — honors trailing waits.
+  const releaseTid=setTimeout(()=>{isAutoPlaying=false;updateUI();}, cum);
+  playTimeoutIds.push(releaseTid);
+  isAutoPlaying=true;
+  updateUI();
+}
+function restart(){
+  resetSim();
+  if(playSeq.length) runPlaySequence();
+}
+
+// Size slider helpers
+function syncSizeSlider(){
+  const fmt=getFmt();
+  const slider=document.getElementById('cfg-size');
+  slider.max=FMT_MAX[fmt];
+  slider.min=64;
+  slider.value=fmtSizes[fmt];
+  document.getElementById('size-val').textContent=formatBytes(fmtSizes[fmt]);
+}
+
+// Segmented control shim: clicking a button updates the hidden <select>
+// and dispatches a 'change' event, so existing handlers keep working.
+function wireSegmented(segId, selId){
+  const seg=document.getElementById(segId), sel=document.getElementById(selId);
+  seg.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const v=btn.dataset.value;
+      if(sel.value===v) return;
+      seg.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===btn?'true':'false'));
+      sel.value=v;
+      sel.dispatchEvent(new Event('change'));
+    });
+  });
+}
+wireSegmented('seg-iface','cfg-iface');
+wireSegmented('seg-format','cfg-format');
+
+// Collapsible config: toggle aria-expanded + .expanded class on #config (the latter
+// drives show/hide of #cfg-body, since the body is no longer cfg-toggle's adjacent sibling).
+document.getElementById('cfg-toggle').addEventListener('click',function(){
+  const expanded=this.getAttribute('aria-expanded')==='true';
+  this.setAttribute('aria-expanded',expanded?'false':'true');
+  document.getElementById('config').classList.toggle('expanded',!expanded);
+});
+
+// Keep the collapsed summary line in sync with current settings.
+// A custom title can be supplied via ?title=... in the URL; it overrides the
+// auto-generated summary entirely (the auto version is used as a fallback).
+const FMT_NAME={packet:'Packets',message:'Messages',bytestream:'Bytestream'};
+const CUSTOM_TITLE=new URLSearchParams(location.search).get('title');
+function updateCfgSummary(){
+  const el=document.getElementById('cfg-summary');
+  if(CUSTOM_TITLE!==null){el.textContent=CUSTOM_TITLE;return;}
+  const iface=getIface(), fmt=getFmt(), size=formatBytes(fmtSize(fmt));
+  const ifaceName=iface==='enso'?'Ensō':'Packetized';
+  el.textContent=`${ifaceName} Interface · ${size} ${FMT_NAME[fmt]}`;
+}
+
+// Config change handlers
+document.getElementById('cfg-iface').addEventListener('change',()=>{resetSim();updateCfgSummary();});
+document.getElementById('cfg-cache').addEventListener('change',()=>{buildStaticDiagram();render();updateUI();});
+document.getElementById('cfg-format').addEventListener('change',()=>{
+  syncSizeSlider();
+  updateCfgSummary();
+  updateUI();
+  setStatus(`Format: <strong>${getFmt()}</strong> · ${formatBytes(fmtSizes[getFmt()])}. Adjust size above.`);
+});
+document.getElementById('cfg-size').addEventListener('input',function(){
+  fmtSizes[getFmt()]=parseInt(this.value);
+  document.getElementById('size-val').textContent=formatBytes(parseInt(this.value));
+  updateCfgSummary();
+  updateUI();
+});
+
+// Click-to-type size editing: swap the display span for an editable input.
+// Accepts plain numbers ("1500") or numbers with units ("1.5kib", "2 KB").
+(function(){
+  const display=document.getElementById('size-val');
+  const input=document.getElementById('size-val-input');
+  const slider=document.getElementById('cfg-size');
+  function parseSize(s){
+    s=String(s).trim().toLowerCase().replace(/\s+/g,'');
+    const m=/^(\d+(?:\.\d+)?)(b|kb|kib|k)?$/.exec(s);
+    if(!m) return NaN;
+    const num=parseFloat(m[1]);
+    return Math.round(num*((m[2]&&m[2][0]==='k')?1024:1));
+  }
+  function enterEdit(){
+    input.value=fmtSizes[getFmt()];
+    display.hidden=true;
+    input.hidden=false;
+    input.focus();
+    input.select();
+  }
+  function commit(){
+    if(input.hidden) return;
+    const fmt=getFmt();
+    const v=parseSize(input.value);
+    if(!isNaN(v)&&v>0){
+      const clamped=Math.min(Math.max(v,64),FMT_MAX[fmt]);
+      fmtSizes[fmt]=clamped;
+      slider.value=clamped;
+    }
+    display.textContent=formatBytes(fmtSizes[fmt]);
+    input.hidden=true;
+    display.hidden=false;
+    updateCfgSummary();
+    updateUI();
+  }
+  function cancel(){
+    input.hidden=true;
+    display.hidden=false;
+  }
+  display.addEventListener('click',enterEdit);
+  display.addEventListener('keydown',e=>{
+    if(e.key==='Enter'||e.key===' '){e.preventDefault();enterEdit();}
+  });
+  input.addEventListener('blur',commit);
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();input.blur();}
+    else if(e.key==='Escape'){e.preventDefault();cancel();}
+  });
+})();
+document.getElementById('cfg-speed').addEventListener('input',function(){
+  document.getElementById('speed-val').textContent=this.value+'×';
+});
+
+// Apply URL query parameters (for embedding presets in the blog post).
+// Recognized: iface, format, size, cache, speed, locked.
+//   ?iface=enso&format=message&size=512&locked=1
+(function applyPresets(){
+  const p=new URLSearchParams(location.search);
+  const setSeg=(segId, selId, v)=>{
+    document.getElementById(selId).value=v;
+    document.querySelectorAll('#'+segId+' button').forEach(b=>
+      b.setAttribute('aria-pressed', b.dataset.value===v ? 'true' : 'false'));
+  };
+  if(p.has('iface')){
+    const v=p.get('iface');
+    if(v==='packetized'||v==='enso') setSeg('seg-iface','cfg-iface',v);
+  }
+  if(p.has('format')){
+    const v=p.get('format');
+    if(['packet','message','bytestream'].includes(v)) setSeg('seg-format','cfg-format',v);
+  }
+  if(p.has('size')){
+    const n=parseInt(p.get('size'),10);
+    const fmt=document.getElementById('cfg-format').value;
+    if(!isNaN(n)&&n>0) fmtSizes[fmt]=Math.min(n,FMT_MAX[fmt]);
+  }
+  if(p.has('cache')) document.getElementById('cfg-cache').checked = p.get('cache')==='1';
+  if(p.has('speed')){
+    const v=parseFloat(p.get('speed'));
+    if(!isNaN(v)){
+      document.getElementById('cfg-speed').value=v;
+      document.getElementById('speed-val').textContent=v+'×';
+    }
+  }
+  if(p.get('locked')==='1' || p.has('lock')){
+    document.getElementById('config').classList.add('locked');
+    document.getElementById('cfg-toggle').disabled=true;
+  } else {
+    // Unlocked: start with the Settings panel expanded so all controls (including Restart) are visible.
+    document.getElementById('config').classList.add('expanded');
+    document.getElementById('cfg-toggle').setAttribute('aria-expanded','true');
+  }
+  // Per-stat visibility toggles: pcie=0 hides PCIe Efficiency, l1d=0 hides L1d Hits.
+  if(p.get('pcie')==='0') document.getElementById('stat-pcie').style.display='none';
+  if(p.get('l1d')==='0') document.getElementById('stat-l1d').style.display='none';
+})();
+
+// Init
+S=makeState(); EQ=new MinHeap();
+syncSizeSlider();
+updateCfgSummary();
+buildStaticDiagram(); render(); updateUI();
+
+// Auto-play: start the sequence the first time the simulator scrolls into view.
+// IntersectionObserver inside an iframe reports visibility relative to the top-level
+// viewport in modern browsers, so this fires only when the iframe is on-screen.
+if(playSeq.length){
+  let started=false;
+  const start=()=>{if(started)return;started=true;runPlaySequence();};
+  if('IntersectionObserver' in window){
+    const obs=new IntersectionObserver((entries)=>{
+      for(const e of entries){
+        if(e.isIntersecting){start();obs.disconnect();break;}
+      }
+    },{threshold:0.25});
+    obs.observe(document.getElementById('sim'));
+  } else {
+    setTimeout(start,200);
+  }
+}
+
+// Notify parent iframe of content height whenever it changes
+if(window.parent!==window){
+  new ResizeObserver(()=>{
+    window.parent.postMessage({ensoSimHeight:document.getElementById('sim').offsetHeight},'*');
+  }).observe(document.getElementById('sim'));
+}
+</script>
+</body>
+</html>
