@@ -29,7 +29,7 @@ committee = [
 
 
 We often think about improving application performance by speeding up some part of the application itself.
-This can be done in many ways, such as optimizing the application code, using a more efficient algorithm, or even offloading parts of the application to specialized hardware. But a lot of the overheads that applications experience today are *artificially* imposed by the underlying hardware interface. In this blog post, we will look at how the interface exposed by existing network interface cards (NICs) impose significant overheads to modern applications and how a new NIC interface called Ensō can help eliminate these overheads.
+This can be done in many ways, such as optimizing the application code, using a more efficient algorithm, or even offloading parts of the application to specialized hardware. But a lot of the overheads that applications experience today are inadvertently imposed by the underlying hardware interface. In this blog post, we will look at how the interface exposed by existing network interface cards (NICs) imposes significant overheads on modern applications and how a new NIC interface called Ensō can help eliminate these overheads.
 <!-- more -->
 
 <script>
@@ -45,24 +45,15 @@ window.addEventListener('message',function(e){
 *This blog post is based on the OSDI '23 paper [Ensō: A Streaming Interface for NIC-Application Communication](https://www.usenix.org/conference/osdi23/presentation/sadok). Refer to the paper if you are interested in more technical details.*
 
 
-## The Rise and Fall of the Packetized NIC Interface
+## The Rise of the Packetized NIC Interface
 
-The way network interface cards (NICs) interact with software has remained largely unchanged for decades. With ever-increasing network link speeds and a proliferation of complex functionality running on the NIC, this interface is showing its age.
-
-30 years ago, NICs were significantly simpler. They were designed to interface with the OS kernel typically running on a single-core CPU. The NIC delivered raw packets to the kernel, which then processed these packets (e.g., through the TCP stack) finally delivering the processed data to applications. The existing NIC interface was designed around this simple model, where the NIC and the kernel exchange individual packets.
-
-Many things have changed since then. On the NIC side, modern NICs have thousands of queues. Applications can now have dedicated queues and rely on the NIC to multiplex/demultiplex packets coming in and out of the network directly to the application's memory. Modern NICs also offer a wide range of offloads, from simple ones such as checksum and segmentation to more complex ones such as full transport protocol implementations. On the software side, applications have also evolved. High-performance network stacks often employ techniques such as *batching* where they process multiple packet at a time, instead of individual packets, which helps reducing per-packet overheads.
-
-> While NICs and packet processing software have changed dramatically over the last decades, the interface that NICs expose has remained surprisingly unchanged---still designed to exchange individual packets with software.
-
+Thirty years ago, NICs were significantly simpler. They were designed to deliver raw packets to the kernel, which then processed these packets (e.g., through the TCP stack), finally delivering the processed data to applications. The existing NIC interface was designed around this simple model, where the NIC and the kernel exchange individual packets. We refer to this interface as the *packetized* NIC interface.
 
 ### Overview of the Packetized NIC Interface
 
-The incongruence between the NIC interface and the data being exchanged is becoming increasingly problematic as NICs implement more complex functionality and high-performance applications rely more on techniques such as batching. To better understand this incongruence, let us first look at how the packetized NIC interface works in more detail.
+At a high level, the packetized interface places each incoming and outgoing packet in a dedicated packet buffer in host memory. Each packet buffer has a fixed size that is usually set so that it can accommodate the largest possible packet size (MTU). This is necessary, as software does not know ahead of time what the next packet size will be.
 
-As the name suggests, the packetized NIC interface is designed around *packets*. At a high level, we place each incoming and outgoing packet in a dedicated packet buffer in host memory. Each packet buffer has a fixed size that is usually set so that it can accommodate the largest possible packet size (MTU). This is necessary, as software does not know ahead of time what the next packet size will be.
-
-The following interactive diagram illustrates how software receives packets from the NIC using a packetized NIC interface. To receive a packet, the software first needs to post empty packet buffers to the NIC (not shown). The NIC will then keep the address of the next available buffers in its internal memory so that, when a packet arrives, the NIC can directly copy the packet to the next available buffer in host memory. Then, for each packet, the NIC sends a descriptor to a descriptor ring buffer, informing the software of the packet's location in memory.
+The following interactive diagram illustrates how software receives packets from the NIC using a packetized NIC interface. To receive a packet, the software first needs to post empty packet buffers to the NIC (not shown). The NIC will then keep the addresses of the next available buffers in its internal memory so that, when a packet arrives, the NIC can directly copy the packet to the next available buffer in host memory. Then, for each packet, the NIC sends a descriptor to a descriptor ring buffer, informing the software of the packet's location in memory.
 
 You can play with the following diagram to explore how the packetized NIC interface works. Click on "Receive" to simulate receiving packets from the NIC and on "Consume" to simulate software consuming the packets. Note that each packet is placed in a dedicated buffer and that the NIC sends a descriptor for every packet received.
 
@@ -73,22 +64,25 @@ You can play with the following diagram to explore how the packetized NIC interf
 </div>
 
 
+## The Fall of the Packetized NIC Interface
 
-### Problems with the Packetized NIC Interface
+Many things have changed since the packetized interface was first introduced. On the NIC side, modern NICs have thousands of queues. Applications can now have dedicated queues and rely on the NIC to multiplex/demultiplex packets coming in and out of the network directly to the application's memory. Modern NICs also offer a wide range of offloads, from simple ones such as checksum and segmentation to more complex ones such as full transport protocol implementations. On the software side, applications have also evolved. High-performance network stacks often employ techniques such as *batching* where they process multiple packets at a time, instead of individual packets, which helps reduce per-packet overheads.
 
-Now that we understand how the packetized NIC interface works, let us look at its problems in more detail.
+> While NICs and packet processing software have changed dramatically over the last decades, the interface that NICs expose has remained surprisingly unchanged---still designed to exchange individual packets with software.
 
-❶ **Packetized Abstraction:** The first problem with the packetized interface is the packetized *abstraction* itself. This arises from the current trend of NICs increasingly implementing functionality that operate at higher layers of the network stack. NICs that implement a transport protocol are able to directly push application-level messages or bytestreams to software, which are assembled at the NIC by combining multiple packets. Unfortunately, by shoehorning these high-level data types into the packetized abstraction, the packetized interface imposes unnecessary overheads to software.
+The mismatch between the NIC interface and the data being exchanged leads to the following three problems:
 
-For instance, consider a NIC that implements a transport protocol such as TCP. With TCP, applications exchange data using bytestreams. TCP is responsible for packetizing the data and make sure that every piece of data sent is received by the application. Therefore a NIC that implements TCP, or other bytestream-based transport, should be able to directly push bytestreams to software. But if the NIC exposes a packetized interface, it needs to split the incoming bytestream into chunks that fit in the available packet buffers. The following interactive diagram illustrates this issue. 
+❶ **Packetized Abstraction:** The first problem with the packetized interface is the packetized *abstraction* itself. This arises from the current trend of NICs increasingly implementing functionality that operates at higher layers of the network stack. NICs that implement a transport protocol are able to directly push application-level messages or bytestreams to software, which are assembled at the NIC by combining multiple packets. Unfortunately, by shoehorning these high-level data types into the packetized abstraction, the packetized interface imposes unnecessary overheads on software.
+
+For instance, consider a NIC that implements a transport protocol such as TCP. With TCP, applications exchange data using bytestreams. TCP is responsible for packetizing the data and making sure that every piece of data sent is received by the application. Therefore, a NIC that implements TCP, or other bytestream-based transport, should be able to reassemble packets and directly push bytestreams to software. But if the NIC exposes a packetized interface, it needs to split the incoming bytestream into chunks that fit in the available packet buffers. The following interactive diagram illustrates this issue. 
 
 <div style="margin: 1.5em 0;">
 <iframe class="enso-sim"
-  src="./simulator.html?title=Issue with the Packetized Abstraction · Receiving bytestreams&iface=packetized&format=bytestream&size=5120&locked=1&pcie=0&l1d=0&play=r,m=Bytestream is larger than the packet buffers and needs to be split.,5000,m=Software needs to recombine pieces before processing.,c,2000,c,4000,m="
+  src="./simulator.html?title=Issue with the Packetized Abstraction · Receiving bytestreams&reasm=1&iface=packetized&format=bytestream&size=5120&locked=1&pcie=0&l1d=0&play=r,m=Reassembled bytestream is larger than the packet buffers and needs to be split.,5000,m=Software needs to recombine pieces before processing.,c,2000,c,4000,m="
   width="100%" height="500" style="border:none;display:block;" loading="lazy"></iframe>
 </div>
 
-Once receiving these separate chunks, software needs to recombine them to be able to deliver a contiguous bytestream to the application. This is problematic for two reasons: First, recombining these pieces into a contiguous buffer requires data copies, which consumes CPU cycles. Second, because these pieces can be in arbitrary memory locations, it is hard for the CPU to predict what the next memory access will be. We explore this second problem in more detail next.
+Upon receiving these separate chunks, software needs to recombine them to be able to deliver a contiguous bytestream to the application. This is problematic for two reasons: First, recombining these pieces into a contiguous buffer requires data copies, which consumes CPU cycles. Second, because these pieces can be in arbitrary memory locations, it is hard for the CPU to predict what the next memory access will be. We explore this second problem in more detail next.
 
 ❷ **Chaotic Memory Accesses:** Because the packetized interface places incoming data in packet buffers that can be in *arbitrary* memory locations, it is hard for the CPU to predict what the next access will be. This prevents CPU features such as the streaming prefetcher from working well, leading to a significant number of cache misses. To illustrate this, consider the following interactive diagram that simulates receiving 64 B packets using the packetized interface. Because addresses are unpredictable, whenever software accesses a new packet, it must fetch it from the last-level cache (LLC) or main memory, paying a much higher cost compared to serving data from the L1 cache.
 
@@ -101,7 +95,7 @@ Once receiving these separate chunks, software needs to recombine them to be abl
 Note that simply arranging the packet buffers sequentially in memory does not solve the problem. This is because incoming packets have different sizes, which are not known in advance, still requiring the CPU to jump to unpredictable memory locations. Chaotic memory accesses result in as much as 55% miss ratio for the L2 cache.
 
 
-❸ **Per-Packet Overhead:** The packetized interface also adds significant overhead due to per-packet metadata. Since software needs to post a buffer to the NIC for every packet and the NIC must also notify every packet to software, the packetized interface requires a significant amount of PCIe bandwidth to exchange metadata. These overheads are despite the fact that high-performance network stacks today such as DPDK employ batching techniques---processing multiple packets at every iteration---to improve code locality and save CPU cycles. As a result, the packetized interface becomes bottlenecked by PCIe when processing small requests, being unable to reach line rate regardless of the number of CPU cores used in the system.
+❸ **Per-Packet Overhead:** The packetized interface also adds significant overhead due to per-packet metadata. Since software needs to post a buffer to the NIC for every packet and the NIC must also notify software of every packet, the packetized interface requires a significant amount of PCIe bandwidth to exchange metadata. These overheads are despite the fact that high-performance network stacks today such as DPDK employ batching techniques---processing multiple packets at every iteration---to improve code locality and save CPU cycles. As a result, the packetized interface becomes bottlenecked by PCIe when processing small requests, being unable to reach line rate regardless of the number of CPU cores used in the system.
 
 The following interactive diagram illustrates the issue. Note the PCIe efficiency counter in the bottom right corner, which shows the percentage of PCIe bandwidth used for payload vs metadata. With small packets (64 B), the PCIe efficiency can be as low as 61%, meaning that 39% of the PCIe bandwidth is used for metadata.
 
@@ -114,18 +108,18 @@ The following interactive diagram illustrates the issue. Note the PCIe efficienc
 
 ## Ensō: A Streaming NIC Interface
 
-Ensō is a new NIC interface that provides a *streaming abstraction*. At a high level, Ensō gives software the illusion of an unbounded buffer through a new primitive called Ensō Pipe. Software can then use Ensō Pipes to exchange data with the NIC, by reading sequentially to receive data, and by writing sequentially to transmit data.
+Ensō is a new NIC interface that provides a *streaming abstraction*. At a high level, Ensō allows the software and the NIC to exchange data using bytestreams. Instead of fixed-size buffers, Ensō gives software the illusion of an unbounded buffer through a new primitive called Ensō Pipe. Software can then use Ensō Pipes to exchange data with the NIC, by reading sequentially to receive data, and by writing sequentially to transmit data.
 
-Ensō imposes no structure to the data written to these buffers---applications and the NIC can use Ensō Pipes to communicate arbitrary streams of bytes. This allows Ensō Pipes to be flexibly used regardless of the functionality running on the NIC. NICs that implement no offloads can use Ensō Pipes to communicate raw packets. NICs that implement a message-based transport protocol can push complete messages to these buffers. Finally NICs that implement a streaming-based transport protocol, such as TCP, can use Ensō Pipes to communicate bytestreams directly with applications.
+Ensō imposes no structure on the data written to these buffers---applications and the NIC can use Ensō Pipes to communicate arbitrary streams of bytes. This allows Ensō Pipes to be flexibly used regardless of the functionality running on the NIC. NICs that implement no offloads can use Ensō Pipes to communicate raw packets. NICs that implement a message-based transport protocol can push complete messages to these buffers. Finally, NICs that implement a streaming-based transport protocol, such as TCP, can use Ensō Pipes to communicate bytestreams directly with applications.
 
 
 ### How to implement a streaming abstraction?
 
-Different from the packetized interface, that uses a ring buffer of descriptors, in Ensō each Ensō Pipe consists of a ring buffer of *data*. Since data is written to the ring buffer itself, this is what allows applications and the NIC to write and read data sequentially.
+Unlike the packetized interface, which uses a ring buffer of *descriptors*, Ensō uses a ring buffer of *data* for each Ensō Pipe. Since data is written to the ring buffer itself, this is what allows applications and the NIC to write and read data sequentially.
 
 To synchronize access to the buffer, the NIC and the application each control a pointer. When the application is receiving data from the NIC, the NIC advances its pointer (tail) after writing data to the buffer, and the application advances its pointer (head) when it is done processing the data.
 
-To allow the NIC to inform pointer updates to software, Ensō also has a notification buffer. Similar to the descriptor ring buffer in the packetized interface, the notification buffer is a ring buffer with fixed slots. Whenever the NIC wishes to advance its pointer, it sends a notification to software through the notification buffer. However, different from descriptors, notifications do not need to be sent for every chunk of data written to the buffer. Instead, the NIC can send one notification to inform software of *multiple* chunks of data at once.
+To allow the NIC to send pointer updates to software, Ensō also has a notification buffer. Similar to the descriptor ring buffer in the packetized interface, the notification buffer is a ring buffer with fixed slots. Whenever the NIC wishes to advance its pointer, it sends a notification to software through the notification buffer. However, different from descriptors, notifications do not need to be sent for every chunk of data written to the buffer. Instead, the NIC can send one notification to inform software of *multiple* chunks of data at once.
 
 The following interactive diagram illustrates the Ensō interface. Note that the packets are written sequentially in the same Ensō Pipe. Also note that the NIC only sends a notification to the first packet, and waits for software to advance its pointer before sending another notification for the next batch of packets.
 
@@ -141,7 +135,7 @@ The following interactive diagram illustrates the Ensō interface. Note that the
 
 Besides being a more flexible abstraction for high-level offloads running on the NIC, Ensō's streaming abstraction also solves the performance issues with the packetized interface that we described earlier.
 
-**Sequential memory access:** Since multiple chunks of data are placed back to back in Ensō pipes, memory accesses are naturally sequential. This makes it easier for the CPU to predict what the next memory access will be. As a result, Ensō vastly reduces the number of cache misses compared to the packetized interface.
+**Sequential memory access:** Since multiple chunks of data are placed back to back in Ensō Pipes, memory accesses are naturally sequential. This makes it easier for the CPU to predict what the next memory access will be. As a result, Ensō vastly reduces the number of cache misses compared to the packetized interface.
 
 **No per-packet overhead:** Placing data sequentially in Ensō Pipes also allows the NIC to notify multiple chunks of data at once. This avoids the per-packet notification required in the packetized interface. As a result, Ensō significantly reduces the amount of PCIe bandwidth used for metadata as well as CPU cycles required to produce, access, and consume descriptors.
 
@@ -165,7 +159,7 @@ The following interactive diagrams illustrate how Ensō solves the problems we d
   </div>
   <div class="enso-tabs__panel" role="tabpanel" id="enso-panel-1" aria-labelledby="enso-tab-1">
     <iframe class="enso-sim"
-      data-src="./simulator.html?iface=enso&format=bytestream&size=10120&locked=1&pcie=0&l1d=0&title=Streaming%20Abstraction%20%C2%B7%20Receiving%20bytestreams%20natively&play=r,m=With Ensō bytestreams do not need to be split.,4000,m=Software can access chunks of sequential data without copies.,c,5000,m="
+      data-src="./simulator.html?iface=enso&format=bytestream&size=10120&locked=1&reasm=1&pcie=0&l1d=0&title=Streaming%20Abstraction%20%C2%B7%20Receiving%20bytestreams%20natively&play=r,m=With Ensō bytestreams do not need to be split.,4000,m=Software can access chunks of sequential data without copies.,c,5000,m="
       title="Ensō receiving bytestreams natively" loading="lazy"></iframe>
   </div>
   <div class="enso-tabs__panel" role="tabpanel" id="enso-panel-2" aria-labelledby="enso-tab-2" hidden>
@@ -222,13 +216,13 @@ The following interactive diagrams illustrate how Ensō solves the problems we d
 
 Because Ensō is a new NIC interface, implementing it requires changes to both the NIC and the software running on the CPU. Ensō's implementation comprises three components:
 
-**NIC hardware:** We implemented a NIC in SystemVerilog that exposes the Ensō interface. We synthesized the design targeting an FPGA (programmable hardware device). Using an FPGA lets us test the implementation in a real system, but the design can also be synthesized as a fixed-function hardware.
+**NIC hardware:** We implemented a NIC in SystemVerilog that exposes the Ensō interface. We synthesized the design targeting an FPGA (programmable hardware device). Using an FPGA lets us test the implementation in a real system, but the design can also be synthesized as fixed-function hardware.
 
 **User-space library:** The software implementation is designed so that applications can communicate directly with the NIC without going through an I/O core or the kernel. Applications can link to the Ensō library and use its streaming API to push or pull data from the NIC. The library is implemented in C++17.
 
-**Kernel module:** While applications use the library to communicate directly with the NIC, setup and resource management is still done by the kernel. Ensō provides a kernel module to accomplish these tasks. The library talks with the kernel module whenever it needs to allocate and free resources, e.g., Ensō Pipes.
+**Kernel module:** While applications use the library to communicate directly with the NIC, setup and resource management are still done by the kernel. Ensō provides a kernel module to accomplish these tasks. The library talks with the kernel module whenever it needs to allocate and free resources, e.g., Ensō Pipes.
 
-Refer to the [Ensō Documentation](https://enso.cs.cmu.edu) for instructions on how to setup and use Ensō with your own application.
+Refer to the [Ensō Documentation](https://enso.cs.cmu.edu) for instructions on how to set up and use Ensō with your own application.
 
 
 ## Impact on Application Performance
@@ -244,7 +238,7 @@ The following table summarizes the results. It shows the throughput improvement 
 | MICA Key-Value Store \[[NSDI ’14](https://www.usenix.org/conference/nsdi14/technical-sessions/presentation/lim)\] | Up to 47% |
 | Log Monitor (Inspired by [AWS CloudWatch Logs](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/WhatIsCloudWatchLogs.html)) | Up to 95% |
 
-The above represent different classes of applications. Google's Maglev Load Balancer and the Network Telemetry applications are typical middleboxes that operate on raw packets. MICA is a key-value store that operate on messages. Finally, the Log Monitor application is a streaming application that operates on bytestreams. These improvements stem only from the change in NIC interface, we expect even more benefits as Ensō enables NICs to implement more complex offloads such as transport protocols with less software overhead.
+The results above cover different classes of applications. Google's Maglev Load Balancer and the Network Telemetry applications are typical middleboxes that operate on raw packets. MICA is a key-value store that operates on messages. Finally, the Log Monitor application is a streaming application that operates on bytestreams. These improvements stem only from the change in NIC interface; we expect even more benefits as Ensō enables NICs to implement more complex offloads such as transport protocols with less software overhead.
 
 You can also refer to the paper if you are interested in more detailed experiments. In the paper we conduct a series of microbenchmarks that evaluate how some of our design choices affect performance. We also show that Ensō is able to achieve 100Gbps line rate with minimum-size packets using a *single* CPU core.
 

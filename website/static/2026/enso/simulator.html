@@ -307,6 +307,10 @@ svg#diagram{display:block;width:100%;max-width:900px;margin:0 auto}
       <span class="label">Show Cache</span>
       <label class="toggle"><input type="checkbox" id="cfg-cache"><span class="track"></span></label>
     </div>
+    <div class="cfg-group" id="cfg-group-reasm">
+      <span class="label">Show Reassembler</span>
+      <label class="toggle"><input type="checkbox" id="cfg-reasm"><span class="track"></span></label>
+    </div>
     <div class="cfg-spacer"></div>
     <div class="cfg-group">
       <button class="btn-restart" onclick="restart()" aria-label="Restart simulation"><span aria-hidden="true">↺</span> Restart</button>
@@ -350,6 +354,7 @@ svg#diagram{display:block;width:100%;max-width:900px;margin:0 auto}
       <g id="g-arrows"></g>
       <g id="g-cache-highlight"></g>
       <g id="g-cache-flow"></g>
+      <g id="g-net-particles"></g>
       <g id="g-pcie-particles" clip-path="url(#pcie-clip)"></g>
       <g id="g-llc-particles" clip-path="url(#llc-clip)"></g>
     </svg>
@@ -389,6 +394,10 @@ const L = {
   RING_H: 28,
   // Packet buffer geometry
   PKT_W:118, PKT_H:28,
+  // NIC reassembly buffer — a horizontal bar inside the NIC. Incoming network packets
+  // fill proportional, ordered chunks of this bar; when full, the message/bytestream is
+  // complete and gets DMA'd to the host. Centered vertically on the PCIe line (PC_Y).
+  RB_X:27, RB_W:106, RB_Y:143, RB_H:44,
   // Ensō pipe bar — shifted up so pipe-tail label (183) and ring-head label (205) have 22px gap
   PIPE_Y: 104, PIPE_H: 56,
   // Cell (desc/notif)
@@ -472,6 +481,12 @@ function formatBytes(n){
   if(n>=1024) return (n/1024).toFixed(n%1024===0?0:1)+' KiB';
   return n+' B';
 }
+// Network ingress: incoming data arrives at the NIC as MTU-sized network packets.
+// Raw packets (≤ MTU) are forwarded directly; messages/bytestreams larger than the MTU
+// arrive as several packets that the NIC reassembles before delivering to the host.
+const NET_MTU=1518;
+function netSegments(sz){return Math.max(1,Math.ceil(sz/NET_MTU));}
+function netHopNs(bytes){return 240 + bytes/16;} // time for one network packet to reach the NIC
 function pcieNs(bytes){return NS.PCIE_LAT + bytes/NS.PCIE_BW}
 function cacheNs(lv){return {llc:NS.LLC,l2:NS.L2,l1:NS.L1}[lv]||NS.LLC}
 function fmtSize(fmt){return fmtSizes[fmt]||FMT_DEFAULTS[fmt]||64}
@@ -518,7 +533,12 @@ function receivePacketized(){
   S.rx++;
   S.pcieData+=sz;
   S.pcieTotal+=sz+numBufs*(FMT_SIZE.desc);
-  let tCursor=S.time;
+  // Network ingress (only when the reassembly view is enabled): packets arrive at (and are
+  // reassembled in) the NIC before being DMA'd to the host, so host-side delivery is delayed
+  // until reassembly completes (t0). With the view off, behavior is unchanged (t0 = now).
+  const reasmNs=showReasm()?scheduleIngress(fmt,sz):0;
+  const t0=S.time+reasmNs;
+  let tCursor=t0;
   for(let part=0;part<numBufs;part++){
     const bufId=bufIds[part];
     const chunkSz=part<numBufs-1?BUF_SIZE_BYTES:sz-(numBufs-1)*BUF_SIZE_BYTES;
@@ -535,7 +555,7 @@ function receivePacketized(){
   }
   S.descTail=(S.descTail+numBufs)%S.n;
   const splitNote=numBufs>1?` → split across ${numBufs} × ${formatBytes(BUF_SIZE_BYTES)} buffers`:'';
-  setStatus(`Receiving ${fmt} (${formatBytes(sz)})${splitNote}.`);
+  setStatus(`Receiving ${fmt} (${formatBytes(sz)})${splitNote}.${showReasm()?' '+reasmNote(fmt,sz)+'.':''}`);
 }
 
 function receiveEnso(){
@@ -553,13 +573,17 @@ function receiveEnso(){
     S.ensoPipe[(S.pipeTail+i)%S.ensoPipe.length]={itemId:id,cellIdx:i,totalCells:cells,fmt,arrived:false,sz:i===0?sz:0};
   }
   S.pipeTail=(S.pipeTail+cells)%S.ensoPipe.length;
-  const dt=S.time+pcieNs(sz);
+  // Network ingress (only when the reassembly view is enabled): reassemble at the NIC
+  // first, then DMA the data into the pipe (at t0). With the view off, t0 = now.
+  const reasmNs=showReasm()?scheduleIngress(fmt,sz):0;
+  const t0=S.time+reasmNs;
+  const dt=t0+pcieNs(sz);
   S.rx++; S.pcieData+=sz; S.pcieTotal+=sz;
   EQ.push({t:dt,type:'enso_data_arrive',id,startCell,cells,fmt});
-  // Journey: NIC → PCIe → pipe region
+  // Journey: NIC → PCIe → pipe region (starts once reassembly is done)
   const pipeX=pipeCellX(startCell);
   const segW=Math.max(8,Math.round(cells/S.ensoPipe.length*pipeBarW()));
-  addJourney('data',fmt,S.time,dt,pipeX+segW/2,L.PIPE_Y+L.PIPE_H/2,segW,L.PIPE_H);
+  addJourney('data',fmt,t0,dt,pipeX+segW/2,L.PIPE_Y+L.PIPE_H/2,segW,L.PIPE_H);
   if(wasEmpty){
     const mt=dt+pcieNs(FMT_SIZE.notif);
     const ni=S.notifTail;
@@ -569,11 +593,20 @@ function receiveEnso(){
     S.pcieTotal+=FMT_SIZE.notif;
     EQ.push({t:mt,type:'notif_arrive',id,ni,pointsTo:pt});
     addJourney('meta','notif',dt,mt,descCellCX(ni),L.RING_Y+L.RING_H/2,L.CW,L.RING_H);
-    setStatus(`Receiving ${fmt} (${formatBytes(sz)}) → Ensō pipe. Notification sent (pipe was empty).`);
+    setStatus(`Receiving ${fmt} (${formatBytes(sz)})${reasmLead(fmt,sz)} → Ensō pipe. Notification sent (pipe was empty).`);
   } else {
-    setStatus(`Receiving ${fmt} (${formatBytes(sz)}) → Ensō pipe. Notification suppressed (pipe non-empty).`);
+    setStatus(`Receiving ${fmt} (${formatBytes(sz)})${reasmLead(fmt,sz)} → Ensō pipe. Notification suppressed (pipe non-empty).`);
   }
 }
+
+// Status helpers: describe whether the NIC reassembles the data or forwards it directly.
+// Only relevant when the reassembly view is enabled.
+function reasmNote(fmt,sz){
+  if(fmt==='packet') return 'Packet forwarded directly';
+  const segs=netSegments(sz);
+  return `NIC reassembled ${fmt} from ${segs} packet${segs>1?'s':''}`;
+}
+function reasmLead(fmt,sz){return showReasm()?`. ${reasmNote(fmt,sz)}.`:'.';}
 
 // ================================================================
 // CONSUME
@@ -744,6 +777,58 @@ function addJourney(type, fmt, startNs, endNs, dstX, dstY, w=16, h=14){
 function easeInOut(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
 
 // ================================================================
+// NETWORK INGRESS (Network → NIC reassembly)
+// ================================================================
+// Position of one reassembled piece inside the NIC's reassembly bar. Each piece occupies
+// a contiguous chunk proportional to its byte size, at byte offset `off` within `total`,
+// so the bar fills left-to-right and is visibly "complete" once the last piece lands.
+function nicReasmChunk(off, bytes, total){
+  const gap=2, inset=5;
+  const x=L.RB_X + (off/total)*L.RB_W;
+  const w=(bytes/total)*L.RB_W;
+  return {cx:x + w/2, cy:L.RB_Y+L.RB_H/2, w:Math.max(3, w-gap), h:L.RB_H-2*inset};
+}
+// Where a directly-forwarded raw packet lands inside the NIC (no reassembly buffer).
+function nicDirectPos(sz){
+  const w=Math.max(16, Math.min(L.RB_W-16, Math.round(sz/NET_MTU*(L.RB_W-16))));
+  return {cx:L.NIC_X+L.NIC_W*0.55, cy:L.PC_Y, w, h:18};
+}
+// A single network-packet animation: slides in from the NIC's network port (left edge)
+// to its place, then lingers parked there until `lingerUntil` (when the NIC flushes to host).
+// `pieceIdx` is the packet's index within a reassembled unit (-1 for a directly-forwarded
+// raw packet); it drives alternating shading so adjacent pieces read as distinct packets.
+function addIngress(fmt, startNs, endNs, lingerUntil, sx, sy, dx, dy, w, h, pieceIdx){
+  S.journeys.push({
+    stage:'ingress', fmt, startNs, endNs, lingerUntil, pieceIdx,
+    sx, sy, dx, dy, color:COLOR[fmt]||'#2563eb', w, h,
+    el:null, done:false
+  });
+}
+// Animate all incoming network packets for one Receive and return the reassembly delay
+// (sim-ns from now until the NIC has the full unit and can DMA it to the host).
+function scheduleIngress(fmt, sz){
+  const direct=(fmt==='packet');
+  const total=netSegments(sz);
+  const srcX=L.NIC_X+2, srcY=L.PC_Y; // network port at the NIC's left edge
+  let cum=0, cursor=S.time;
+  const segs=[];
+  for(let i=0;i<total;i++){
+    const bytes=(i<total-1)?NET_MTU:(sz-(total-1)*NET_MTU);
+    cursor+=netHopNs(bytes);
+    segs.push({bytes, off:cum, arrive:cursor});
+    cum+=bytes;
+  }
+  const flushAt=segs[total-1].arrive;
+  for(let i=0;i<total;i++){
+    const s=segs[i];
+    const start=(i===0)?S.time:segs[i-1].arrive;
+    const slot=direct?nicDirectPos(sz):nicReasmChunk(s.off, s.bytes, sz);
+    addIngress(fmt, start, s.arrive, flushAt, srcX, srcY, slot.cx, slot.cy, slot.w, slot.h, direct?-1:i);
+  }
+  return flushAt-S.time;
+}
+
+// ================================================================
 // CACHE FLOW ANIMATION
 // ================================================================
 // CACHE_DUR[level] = wall-clock ms for data to transfer from that cache level to the next.
@@ -821,9 +906,39 @@ function animLoop(){
   // Animate journeys
   const particleG=document.getElementById('g-pcie-particles');
   const llcG=document.getElementById('g-llc-particles');
+  const netG=document.getElementById('g-net-particles');
   S.journeys=S.journeys.filter(j=>{
     if(simNow<j.startNs) return true;
     if(j.done) return false;
+    // Network ingress: straight hop from network into the NIC, then park (reassemble)
+    // in place until the NIC flushes the full unit to the host.
+    if(j.stage==='ingress'){
+      const t=Math.max(0,Math.min(1,(simNow-j.startNs)/(j.endNs-j.startNs)||0));
+      const ep=easeInOut(t);
+      const cx=j.sx+(j.dx-j.sx)*ep, cy=j.sy+(j.dy-j.sy)*ep;
+      if(!j.el){
+        j.el=document.createElementNS('http://www.w3.org/2000/svg','rect');
+        j.el.setAttribute('fill',j.color);
+        if(j.pieceIdx>=0){
+          // Reassembled piece: alternate opacity + a light divider stroke so adjacent
+          // packets read as distinct pieces of the same message/bytestream.
+          j.el.setAttribute('rx',1);
+          j.el.setAttribute('opacity', j.pieceIdx%2 ? '0.72' : '0.96');
+          j.el.setAttribute('stroke','rgba(255,255,255,0.85)');
+          j.el.setAttribute('stroke-width','1');
+        } else {
+          j.el.setAttribute('rx',3);
+          j.el.setAttribute('opacity','0.92');
+        }
+        netG.appendChild(j.el);
+      }
+      j.el.setAttribute('width',j.w); j.el.setAttribute('height',j.h);
+      j.el.setAttribute('x',cx-j.w/2); j.el.setAttribute('y',cy-j.h/2);
+      if(simNow>=j.lingerUntil-10){
+        j.done=true; if(j.el){j.el.remove();j.el=null;} return false;
+      }
+      return true;
+    }
     const total=j.endNs-j.startNs;
     if(total<=0){j.done=true;if(j.el){j.el.remove();j.el=null;}return false;}
     // which phase?
@@ -932,8 +1047,19 @@ function buildStaticDiagram(){
   g.appendChild(nicR);
   const nicName=iface==='enso'?'Ensō NIC':'Packetized NIC';
   g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+16,nicName,'box-title box-title-nic'));
-  g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2-14,'DMA','section-label'));
-  g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2+14,'Engine','section-label'));
+  // NIC interior: with the reassembly view on, messages/bytestreams show a reassembly
+  // buffer (network packets are recombined here); raw packets and the default view show
+  // the DMA engine, since raw packets are forwarded to the host directly.
+  if(showReasm()&&getFmt()!=='packet'){
+    const rbLbl=text(L.RB_X+L.RB_W/2,L.RB_Y-9,'Reassembler','section-label');
+    rbLbl.setAttribute('style','font-size:12px'); g.appendChild(rbLbl);
+    const rb=attrs(el('rect'),{x:L.RB_X,y:L.RB_Y,width:L.RB_W,height:L.RB_H,rx:5,
+      fill:'#fafaf9',stroke:'#d6d3d1','stroke-width':1.2,'stroke-dasharray':'4,3'});
+    g.appendChild(rb);
+  } else {
+    g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2-14,'DMA','section-label'));
+    g.appendChild(text(L.NIC_X+L.NIC_W/2,L.NIC_Y+L.NIC_H/2+14,'Engine','section-label'));
+  }
 
   // PCIe arrow
   const arr=el('line');
@@ -1240,6 +1366,12 @@ function getIface(){return document.getElementById('cfg-iface').value}
 function getFmt(){return document.getElementById('cfg-format').value}
 function getSpeed(){return parseFloat(document.getElementById('cfg-speed').value)}
 function showCache(){return document.getElementById('cfg-cache').checked}
+function showReasm(){return document.getElementById('cfg-reasm').checked}
+// The reassembler only applies to messages/bytestreams (raw packets are forwarded
+// directly), so hide its toggle for the packet format.
+function syncReasmVisibility(){
+  document.getElementById('cfg-group-reasm').style.display=getFmt()==='packet'?'none':'';
+}
 
 function canConsume(){
   if(getIface()==='packetized'){
@@ -1283,6 +1415,7 @@ function resetSim(){
   if(animRafId){cancelAnimationFrame(animRafId);animRafId=null;}
   pendingTimeouts.forEach(id=>clearTimeout(id)); pendingTimeouts.clear();
   clearPlayTimeouts();
+  document.getElementById('g-net-particles').innerHTML='';
   document.getElementById('g-pcie-particles').innerHTML='';
   document.getElementById('g-llc-particles').innerHTML='';
   document.getElementById('g-cache-flow').innerHTML='';
@@ -1426,9 +1559,14 @@ function updateCfgSummary(){
 // Config change handlers
 document.getElementById('cfg-iface').addEventListener('change',()=>{resetSim();updateCfgSummary();});
 document.getElementById('cfg-cache').addEventListener('change',()=>{buildStaticDiagram();render();updateUI();});
+document.getElementById('cfg-reasm').addEventListener('change',()=>{buildStaticDiagram();render();updateUI();});
 document.getElementById('cfg-format').addEventListener('change',()=>{
   syncSizeSlider();
+  syncReasmVisibility();
   updateCfgSummary();
+  // The NIC interior (DMA engine vs reassembly buffer) depends on the format, so rebuild.
+  buildStaticDiagram();
+  render();
   updateUI();
   setStatus(`Format: <strong>${getFmt()}</strong> · ${formatBytes(fmtSizes[getFmt()])}. Adjust size above.`);
 });
@@ -1516,6 +1654,7 @@ document.getElementById('cfg-speed').addEventListener('input',function(){
     if(!isNaN(n)&&n>0) fmtSizes[fmt]=Math.min(n,FMT_MAX[fmt]);
   }
   if(p.has('cache')) document.getElementById('cfg-cache').checked = p.get('cache')==='1';
+  if(p.has('reasm')) document.getElementById('cfg-reasm').checked = p.get('reasm')==='1';
   if(p.has('speed')){
     const v=parseFloat(p.get('speed'));
     if(!isNaN(v)){
@@ -1539,6 +1678,7 @@ document.getElementById('cfg-speed').addEventListener('input',function(){
 // Init
 S=makeState(); EQ=new MinHeap();
 syncSizeSlider();
+syncReasmVisibility();
 updateCfgSummary();
 buildStaticDiagram(); render(); updateUI();
 
