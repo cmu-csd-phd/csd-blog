@@ -37,7 +37,7 @@ Imagine you're a system administrator managing a complex cloud deployment. Day a
  />
 </span>
 
-What if, after a few days of silently recording you perform this task every day, the system could write the code to automate it for you, without you having to explain a single thing?
+What if, after a few days of silently watching you perform this task, the system could write the code to automate it for you, without you having to explain a single thing?
 
 This is what the technique introduced in our paper [_Program Synthesis from Partial Traces_ (PLDI 2025)](https://arxiv.org/pdf/2504.14480) does!
 
@@ -53,17 +53,17 @@ Examples are much simpler, but in practice, they still require expertise and mul
 Recently, with advancements in large language models (LLMs), natural language emerged as the go-to specification ([Chen et al., 2021](https://doi.org/10.48550/arXiv.2107.03374)), making programming more accessible to non-experts than ever. But this comes at a cost: unlike logical formulas and examples, it's not clear how to verify that a program satisfies a natural-language specification.
 
 All these synthesis specifications have something in common: they're _active_ specifications. They require users to explicitly articulate what they want, often through multiple rounds of clarification.
-With <span style="font-variant:small-caps;">Syren</span>, we propose using _passive_ specifications instead: synthesize programs from data users already have, requiring no additional knowledge or effort. We propose program synthesis from execution traces, which serve as digital breadcrumbs left behind by every modern computing system to help us trace back their computations. These traces, whether sequences of API calls, network messages between servers, or system call logs, capture not just the everyday behaviors of systems but also corner cases and execution subtleties. They are already used for monitoring, debugging, and auditing, so why not use them to synthesize automations for hand-executed tasks in these systems, or optimized versions of existing routines?
+With <span style="font-variant:small-caps;">Syren</span>, we propose using _passive_ specifications instead: synthesizing programs from data users already have, requiring no additional knowledge or effort. Specifically, we synthesize programs from execution traces, the digital breadcrumbs left behind by every modern computing system to help us trace back its computations. These traces, whether sequences of API calls, network messages between servers, or system call logs, capture not just the everyday behaviors of systems but also corner cases and execution subtleties. They are already used for monitoring, debugging, and auditing, so why not use them to synthesize automations for hand-executed tasks in these systems, or optimized versions of existing routines?
 
 
 # Synthesis from Partial Traces
 
 The main challenge in synthesizing a program from real-world traces is that they provide only a partial view of what's happening. These traces record only some of the actions the user takes; for example, operations that get billed, or side-effecting executions that interact with external resources, such as network calls or file writes. They lack information about intermediate steps that may transform data internally or affect control flow.
 
-Revisiting the example from the beginning: when the admin stops unused instances, every time they click a button in the visual console, it calls a specific API method under the hood, and that gets recorded. But their decision to potentially force some computing instances to stop after a while, depending on their status, is not recorded. This "computation" happens only in the user's head. To automate the task, we need to automate both sides of the computation: the visible API method calls and the _hidden_ computations that the user executes manually. Inferring these hidden functions poses a significant challenge for synthesis, but without them, the task can't be automated correctly.
+Revisiting the example from the beginning: when the admin stops unused instances, every time they click a button in the visual console, it calls a specific API method under the hood, and that gets recorded. But the admin's decision to potentially force some computing instances to stop after a while, depending on each instance's status, is not recorded. This "computation" happens only in the user's head. To automate the task, we need to automate both sides of the computation: the visible API method calls and the _hidden_ computations that the user executes manually. Inferring these hidden functions poses a significant challenge for synthesis, but without them, the task can't be automated correctly.
 
 For the purpose of this work, we define a _trace_ as the sequence of API methods invoked during a single execution of a task. The traces include the method name, inputs, and outputs for all API calls.
-<span style="font-variant:small-caps;">Syren</span> synthesizes programs from these partial traces by inferring both control flow and non-trivial hidden functions without additional user input. We combine program rewrites of a trivial solution to introduce control flow with synthesis from input-output examples to discover the hidden functions between data in the traces.
+<span style="font-variant:small-caps;">Syren</span> synthesizes programs from these partial traces by inferring both control flow and non-trivial hidden functions without additional user input.
 
 
 # <span style="font-variant:small-caps;">Syren</span>'s Synthesis Procedure {#synthesis-procedure}
@@ -82,13 +82,13 @@ svg a:hover .syren-hotspot, svg a:focus .syren-hotspot { fill-opacity: .05; stro
 </svg>
 <p style="text-align: center; font-size: 85%; font-style: italic; margin: 0.3em 0 0;">Click a stage of the diagram to jump to its explanation.</p>
 </div>
-<span style="font-variant:small-caps;">Syren</span>'s synthesis starts by ingesting input traces, the sequences of actions recorded when someone is executing a task. These traces are turned into an initial version of the automation program that simply replays each trace exactly as observed. This program is correct by construction, in the sense that it can reproduce all the traces taken as input, but way too rigid for real-world use. So <span style="font-variant:small-caps;">Syren</span> then moves into program rewriting, using a library of rules to generalize the code and uncover the "hidden logic" that isn't logged. In the end, <span style="font-variant:small-caps;">Syren</span> outputs a high-level, human-readable script that can automate the task in the scenarios observed in the traces, but also across new ones.
+<span style="font-variant:small-caps;">Syren</span>'s synthesis starts by ingesting input traces, the sequences of actions recorded when someone is executing a task. These traces are turned into an initial version of the automation program that simply replays each trace exactly as observed. It is correct by construction, but way too rigid for real-world use. So <span style="font-variant:small-caps;">Syren</span> then moves into program rewriting, using a library of rules to generalize the code and uncover the "hidden logic" that isn't logged. In the end, <span style="font-variant:small-caps;">Syren</span> outputs a high-level, human-readable script that can automate the task in the scenarios observed in the traces, but also across new ones.
 
 
 ## Example Execution {#example-execution}
 
 
-Performing the example cloud computing task described above in the Amazon Web Services (AWS) console produces logs that show the sequence of underlying API calls made by the system. These logs can be input as traces into <span style="font-variant:small-caps;">Syren</span> for synthesis. Below, we show an example of a trace showing the execution of this task for a single computing instance, with ID `"i-12345"`, Trace #1:
+Performing the example cloud computing task described above in the Amazon Web Services (AWS) console produces logs that show the sequence of underlying API calls made by the system. These logs can be input as traces into <span style="font-variant:small-caps;">Syren</span> for synthesis. Below is an example trace of the execution of this task for a single computing instance with ID `"i-12345"`, which we call Trace #1:
 
 
 ```syren
@@ -105,7 +105,7 @@ Performing the example cloud computing task described above in the Amazon Web Se
 ```
 
 
-Each trace contains the name of the API call, its request parameters (i.e., inputs), and its response parameters (outputs). In Trace #1, there are two API calls, represented as pairs in parentheses: `ec2.StopInstances` and `ec2.DescribeInstanceStatus`. The first element of the pair shows the API method name and its inputs, and the second shows the response to that API call, i.e., its output. We see that in the output of `ec2.DescribeInstanceStatus`, the instance is showing as `"stopped"`. That is the goal; in this case, the system admin's task is complete.
+Trace #1 contains two API calls, `ec2.StopInstances` and `ec2.DescribeInstanceStatus`, each represented as a pair in parentheses: the first element of the pair shows the API method name and its inputs (the request parameters), and the second shows its output (the response). In the output of `ec2.DescribeInstanceStatus`, the instance is showing as `"stopped"`. That is the goal; the system admin's task is complete.
 
 
 The next day, the system admin could execute the same task on instance `"i-54321"` and generate the following trace (Trace #2):
@@ -134,13 +134,13 @@ The next day, the system admin could execute the same task on instance `"i-54321
 In this second execution of the task, `ec2.DescribeInstanceStatus` shows the current status of the instance as `"stopping"` (not `"stopped"`), so there is a second call to `ec2.StopInstances` with `force` set to `true`.
 
 
-When working with traces like these, there's always a trivial solution: a program that exactly reproduces the input traces. But users don't want this brittle reproduction; they want a program that _generalizes_ beyond the examples they've shown. Our cloud administrator doesn't need a script that stops the exact compute instances they've stopped in the past; they need one that takes a list of instance IDs as a parameter, handling the repetitive parts automatically while still letting them provide the essential information.
-Even though this trivial program that reproduces all the traces exactly is not what the user is looking for, it's useful for <span style="font-variant:small-caps;">Syren</span>. We use it as a starting point for our synthesis, and progressively improve it by making it more general and readable.
+When working with traces like these, there's always a trivial solution: a program that exactly reproduces the input traces. But users don't want this brittle reproduction; they want a program that _generalizes_ beyond the examples they've shown. Our cloud administrator doesn't need a script that stops the exact computing instances they've stopped in the past; they need one that takes a list of instance IDs as a parameter, handling the repetitive parts automatically while still letting them provide the essential information.
+This trivial program is still useful to <span style="font-variant:small-caps;">Syren</span>: it serves as the starting point of our synthesis, which progressively makes it more general and readable.
 
 
 ### Initial program {#initial-program}
 
-<span style="font-variant:small-caps;">Syren</span>'s programs are written in a programming language formally defined in [the paper](https://arxiv.org/pdf/2504.14480). It's similar to other scripting languages, such as Python, so users with programming backgrounds can read and edit programs. Its syntax and semantics match those of other commonly used imperative languages, so <span style="font-variant:small-caps;">Syren</span> programs can be easily compiled to other languages.
+<span style="font-variant:small-caps;">Syren</span>'s programs are written in a programming language formally defined in [the paper](https://arxiv.org/pdf/2504.14480). Its syntax and semantics are similar to those of commonly used imperative languages, such as Python, so users with programming backgrounds can read and edit <span style="font-variant:small-caps;">Syren</span> programs, and they can be easily compiled to other languages.
 
 
 We build the initial program by branching the execution on the value of a fresh integer variable, `br`, which is received as an input parameter, and replaying each trace on a different branch. In <span style="font-variant:small-caps;">Syren</span>'s syntax, we explicitly represent the program's input parameters on the first line, preceded by a `λ`. So, `λ br.` in the first line means the program takes as input one parameter, `br`. In the initial program, the sequence of API calls is reproduced exactly as shown in the traces, and all values are hard-coded constants.
@@ -162,12 +162,12 @@ if br == 1 {
 This program will reproduce Trace #1 if the parameter `br` is set to `1` and Trace #2 otherwise. In practice, <span style="font-variant:small-caps;">Syren</span> uses more than two traces, so there are more conditionals in this top-level if-else chain.
 
 
-This initial program is correct by construction: there exists an input for which it reproduces all the traces the user provided. But it's likely not something that the user can use to automate their task, since it doesn't generalize beyond the traces. So, from here, <span style="font-variant:small-caps;">Syren</span> applies a series of _optimizing rewrites_, compiler-like correctness-preserving program rewrites that improve the program, making it more general, readable, and thus closer to the ideal program we want to return to the user.
+This initial program is correct by construction: there exists an input for which it reproduces all the traces the user provided. But it doesn't generalize beyond the traces, so, from here, <span style="font-variant:small-caps;">Syren</span> applies a series of _optimizing rewrites_: compiler-like, correctness-preserving transformations that make the program more general, more readable, and thus closer to the ideal program we want to return to the user.
 
 ### Rewriting the original program {#rewriting-the-original-program}
 
 
-<span style="font-variant:small-caps;">Syren</span>'s first rewrites replace the instance IDs, which are constants hardcoded repeatedly in multiple calls, with a new input parameter to the script, `i_0`. They also pull the first call to `ec2.StopInstances` and the call to `ec2.DescribeInstanceStatus` out of the if-statement, since they are identical in both branches. These rewrites reduce the program size and eliminate repeated API calls, two of <span style="font-variant:small-caps;">Syren</span>'s optimization goals. The program below is the result of these transformations.
+<span style="font-variant:small-caps;">Syren</span>'s first rewrites replace the instance IDs, which are constants hard-coded repeatedly in multiple calls, with a new input parameter to the script, `i_0`. They also pull the first call to `ec2.StopInstances` and the call to `ec2.DescribeInstanceStatus` out of the if-statement, since they are identical in both branches. These rewrites reduce the program size and eliminate repeated API calls, two of <span style="font-variant:small-caps;">Syren</span>'s optimization goals. The program below is the result of these transformations.
 
 <div class="code-before" data-hl='["i-12345"] ;; ["i-54321"]' data-arrows='3-4>2 ;; 6-7>2'>
 
@@ -209,7 +209,7 @@ if !(br == 1) {
 
 The program above still depends on `br`, an artificial variable with no real semantic meaning: the conditional `!(br==1)` decides whether the second, forced call to `ec2.StopInstances` runs. <span style="font-variant:small-caps;">Syren</span> could remove it as it did the instance IDs, by introducing a new input parameter, in this case a Boolean that the user would set to request the forced stop. But that is not what happened in the example task: the administrator decided whether to force the stop based on the outcome of the previous call to `ec2.DescribeInstanceStatus`. If the instance does not show as `"stopped"` yet, they force it.
 
-<span style="font-variant:small-caps;">Syren</span> always tries to infer these hidden data dependencies on previous instructions in the script before defaulting to introducing new parameters. So, in the final rewrite of this example, it replaces `!(br==1)` with the output of a new function `φ`, a stand-in for the computation the user performed in their head. Since we don't know what previous information the user relied on, `φ` takes as input all variables in scope at this point in the program. `φ` remains undefined for now, so we declare the program is parametric on its implementation in the first line with `Λ φ.`.
+<span style="font-variant:small-caps;">Syren</span> always tries to infer these hidden data dependencies on previous instructions in the script before defaulting to introducing new parameters. So, in the final rewrite of this example, it replaces `!(br==1)` with the output of a new function `φ`, a stand-in for the computation the user performed in their head. Since we don't know what previous information the user relied on, `φ` takes as input all variables in scope at this point in the program. `φ` remains undefined for now, so we declare that the program is parametric on its implementation in the first line with `Λ φ.`.
 
 <div class="code-before" data-hl='λ br|br ;; !(br == 1)'>
 
@@ -251,11 +251,11 @@ if c {
 ### Example-based synthesis of hidden functions
 
 Of course, this program is only useful if we can provide an implementation `f` for `φ` for which the program can perform the task. This is where example-based synthesis comes in.
-During the rewrite process, we maintain a mapping from program identifiers to their corresponding values in the traces. Then, we use these mappings to compute a set of input-output constraints that `f` must satisfy. Using these input-output examples, we can use an off-the-shelf synthesizer from examples to generate an implementation of `φ`. <span style="font-variant:small-caps;">Syren</span> supports [Rosette](https://emina.github.io/rosette/index.html) ([Torlak et al., Onward! 2013](https://dl.acm.org/doi/10.1145/2509578.2509586)) or [cvc5](https://cvc5.github.io/) ([Barbosa et al., TACAS 2022](https://doi.org/10.1007/978-3-030-99524-9_24)) as synthesizers from examples.
+During the rewrite process, we maintain a mapping from program identifiers to their corresponding values in the traces. Then, we use these mappings to compute a set of input-output constraints that `f` must satisfy, and feed them to an off-the-shelf synthesizer from examples to generate an implementation of `φ`. <span style="font-variant:small-caps;">Syren</span> supports two such synthesizers: [Rosette](https://emina.github.io/rosette/index.html) ([Torlak et al., Onward! 2013](https://dl.acm.org/doi/10.1145/2509578.2509586)) and [cvc5](https://cvc5.github.io/) ([Barbosa et al., TACAS 2022](https://doi.org/10.1007/978-3-030-99524-9_24)).
 
-Looking at the program above and the traces that originated it side-by-side, we see that the first argument of `φ`, `i_0`, corresponds to the instance ID in the traces, so its value must be `["i-12345"]` to reproduce the behavior in Trace #1 or `["i-54321"]` to reproduce Trace #2. The second argument of `φ`, `x_1`, corresponds to the response of the first API call, `ec2.StopInstances`, and the third argument to the second API call, `ec2.DescribeInstanceStatus`. The output of `φ` is a boolean value that indicates whether the instance has not yet stopped and needs to be forced to stop (which is `false` for the first trace and `true` for the second trace).
+Looking at the program above and the traces that originated it side-by-side, we can read off the values `φ`'s arguments take in each trace: `i_0` is the instance ID, and `x_1` and `x_2` are the responses of the two API calls, as annotated in the constraints below. The output of `φ` is a Boolean value that indicates whether the instance has not yet stopped and needs to be forced to stop: `false` for the first trace and `true` for the second.
 
-So, for the traces and program in this example, we know the implementation of `f` must be such that:
+So, for the traces and program in this example, we know `f` must be such that:
 
 ```syren
 f(["i-12345"], /* parameter i_0 */
@@ -275,13 +275,13 @@ f(["i-54321"], /* parameter i_0 */
 
 for Trace #2.
 
-We encode these input-output constraints into a synthesizer from examples to generate the simplest logical expression that fits the behavior in the traces, and obtain the following implementation `f` for `φ`:
+From these constraints, the synthesizer generates the simplest logical expression that fits the behavior in the traces, giving the following implementation `f` for `φ`:
 
 ```syren
 f := (i_0, x_1, x_2) -> x_2.InstanceState != "stopped"
 ```
 
-Substituting `f` for `φ` yields a program that is correct by construction. Since only the last input is used by `f`, it may be called with that input only.
+Substituting `f` for `φ` yields a program that is correct by construction. Since `f` uses only its last input, we simplify it to take just `x_2`.
 
 
 
@@ -332,13 +332,13 @@ This final program executes the task described at the beginning!
 Rewrites fall into two categories:
 
 
-> __Refinement rules__ are simple structural transformations. These might lift identical statements out of conditionals or replace constants with parameters. They are correctness-preserving by construction and don't require synthesis. They uncover the program's control flow in a way that explains the observed functions.
+> __Refinement rules__ are simple structural transformations. These might lift identical statements out of conditionals or replace constants with parameters. They are correctness-preserving by construction and don't require synthesis. They uncover the program's control flow in a way that explains the observed traces.
 
 
 > __Synthesis rules__ introduce hidden functions. They replace expressions with fresh calls to unknown functions \\(\varphi\\), which are later synthesized using synthesis by example. These rules apply only if a valid implementation of \\(\varphi\\) that preserves trace behavior exists.
 
 
-All rewrite rules are defined as patterns: if at some point the program matches a pattern defined as the start form of the rule, then the rule can be applied to the program. As an example, below is the definition of the first rewrite rule shown in the example above, which extracts an identical expression \\(\mathcal{R}\\) from both the then and the else branch of a conditional. \\(\mathcal{R}\\), \\(\mathcal{S}\\), \\(\mathcal{T}\\), \\(\mathcal{U}\\), and \\(\mathcal{V}\\) are arbitrary sequences of instructions in the program.
+All rewrite rules are defined as patterns. As an example, below is the definition of the first rewrite rule shown in the example above, which extracts an identical sequence of instructions \\(\mathcal{R}\\) from both the then and the else branch of a conditional. \\(\mathcal{R}\\), \\(\mathcal{S}\\), \\(\mathcal{T}\\), \\(\mathcal{U}\\), and \\(\mathcal{V}\\) are arbitrary sequences of instructions in the program.
 
 <span>
   <img 
@@ -361,10 +361,10 @@ The first, \\(\chi_{\mathrm{syn}}\\), follows the widely used [Occam's razor pri
 \\(\chi_{\mathrm{syn}}\\) produces a fine-grained score that distinguishes most programs from one another, giving the search a clear signal at nearly every step.
 
 
-<span style="font-variant:small-caps;">Syren</span> implements a second cost function, \\(\chi_{\mathrm{T}}\\), which takes a more semantic view of the programs: rather than counting syntactic elements, it measures how much each API call is reused across the input traces. A statement executed many times, such as an API call inside a loop shared across traces, contributes more reuse and therefore incurs lower \\(\chi_{\mathrm{T}}\\) cost than the same calls written out redundantly in separate branches. It also penalizes branches that only reproduce a single input trace, treating them as corner cases that suggest the program has not yet generalized. In practice, \\(\chi_{\mathrm{T}}\\) is worse at directing the search than \\(\chi_{\mathrm{syn}}\\), because it is coarser, meaning that more programs have the same score. When used for <span style="font-variant:small-caps;">Syren</span>'s synthesis, both metrics are able to synthesize programs for a similar number of tasks, but \\(\chi_{\mathrm{syn}}\\) generates programs that are easier to read.
+<span style="font-variant:small-caps;">Syren</span> implements a second cost function, \\(\chi_{\mathrm{T}}\\), which takes a more semantic view of the programs: rather than counting syntactic elements, it measures how much each API call is reused across the input traces. A statement executed many times, such as an API call inside a loop shared across traces, contributes more reuse and therefore incurs lower \\(\chi_{\mathrm{T}}\\) cost than the same calls written out redundantly in separate branches. It also penalizes branches that only reproduce a single input trace, treating them as corner cases that suggest the program has not yet generalized. In practice, \\(\chi_{\mathrm{T}}\\) is worse at directing the search than \\(\chi_{\mathrm{syn}}\\), because it is coarser: more programs have the same score. When used for <span style="font-variant:small-caps;">Syren</span>'s synthesis, both metrics are able to synthesize programs for a similar number of tasks, but \\(\chi_{\mathrm{syn}}\\) generates programs that are easier to read.
 
 
-The cost function does more than rank programs after applying rewrites. It actively controls which rewrites to apply at every step of the search. <span style="font-variant:small-caps;">Syren</span> treats the two types of rewrites differently. At each step, it first scans all applicable refinement rules and greedily applies the one that yields the greatest cost reduction, repeating this until no refinement rule can lower the cost further. Only then does it consider synthesis rules, again selecting the one with the largest expected cost reduction and invoking the example-based solver to check whether a valid implementation exists for any newly introduced computation. This ordering means the solver is called as sparingly as possible. The cheap structural rewrites are exhausted first, so that by the time synthesis is attempted, the program is already as simple as refinement alone can make it.
+The cost function does more than rank programs after applying rewrites. It actively controls which rewrites to apply at every step of the search. <span style="font-variant:small-caps;">Syren</span> treats the two types of rewrites differently. At each step, it first scans all applicable refinement rules and greedily applies the one that yields the greatest cost reduction, repeating this until no refinement rule can lower the cost further. Only then does it consider synthesis rules, again selecting the most cost-reducing one and invoking the example-based solver to check whether a valid implementation exists for any newly introduced computation. This ordering exhausts the cheap structural rewrites first, so the solver is called as sparingly as possible.
 As with the cost function itself, <span style="font-variant:small-caps;">Syren</span>'s source code provides predefined search strategies but allows users to define their own.
 
 
@@ -373,10 +373,10 @@ As with the cost function itself, <span style="font-variant:small-caps;">Syren</
 
 <span style="font-variant:small-caps;">Syren</span> is, to our knowledge, the first approach to synthesizing programs that combine side-effecting API calls, control flow, and hidden pure functions purely from execution traces: no annotations, no natural language, no hand-crafted examples.
 
-In [the paper](https://arxiv.org/pdf/2504.14480), we showcase <span style="font-variant:small-caps;">Syren</span>'s practical applicability. It synthesizes correct, human-meaningful scripts for 54 real-world tasks, including cloud automation, filesystem manipulation, and document editing scripts, collected from custom tasks, existing [AWS Automation Runbooks](https://docs.aws.amazon.com/systems-manager-automation-runbooks/latest/userguide/automation-runbook-reference.html), [Blink Automations](https://www.blinkops.com/), and [related work from Guo et al. at PLDI 2022](https://dl.acm.org/doi/10.1145/3519939.3523450). The underlying example-based synthesizer generates non-trivial data transformations that allow <span style="font-variant:small-caps;">Syren</span> to uncover more intricate computations, not visible in the traces. <span style="font-variant:small-caps;">Syren</span> introduces control structures like if-then-else conditionals and retry-until loops, and successfully synthesizes 39 out of 54 scripts in under 5 minutes. 
+In [the paper](https://arxiv.org/pdf/2504.14480), we showcase <span style="font-variant:small-caps;">Syren</span>'s practical applicability. We evaluate it on 54 real-world tasks, including cloud automation, filesystem manipulation, and document editing scripts, collected from custom tasks, existing [AWS Automation Runbooks](https://docs.aws.amazon.com/systems-manager-automation-runbooks/latest/userguide/automation-runbook-reference.html), [Blink Automations](https://www.blinkops.com/), and [related work from Guo et al. at PLDI 2022](https://dl.acm.org/doi/10.1145/3519939.3523450). The underlying example-based synthesizer generates non-trivial data transformations that allow <span style="font-variant:small-caps;">Syren</span> to uncover more intricate computations, not visible in the traces. <span style="font-variant:small-caps;">Syren</span> introduces control structures like if-then-else conditionals and retry-until loops, and synthesizes correct, human-meaningful scripts for 39 of the 54 tasks in under 5 minutes. 
 
 Though powerful, the synthesis of data transformations is <span style="font-variant:small-caps;">Syren</span>'s main bottleneck: when the hidden functions require complex manipulation of JSON data, the underlying example-based synthesizer can fail to find the right expression, either due to the time limit imposed, or because the required computation is not in the language of JSON operations we use. Improving <span style="font-variant:small-caps;">Syren</span>'s performance would require more specialized grammars or solvers for this domain.
-There is another limitation worth acknowledging beyond performance: the quality of <span style="font-variant:small-caps;">Syren</span>'s programs depends heavily on having sufficiently rich and diverse traces. If the traces don't capture the data required to compute a value as the result of a function's evaluation, <span style="font-variant:small-caps;">Syren</span>'s synthesis will fall back into assuming that value is an input parameter. Two very similar traces may provide too little signal for the synthesis-by-example solver to distinguish the right hidden function from a degenerate one. 
+There is another limitation worth acknowledging beyond performance: the quality of <span style="font-variant:small-caps;">Syren</span>'s programs depends heavily on having sufficiently rich and diverse traces. If the traces don't capture the data needed to compute a value, <span style="font-variant:small-caps;">Syren</span> falls back to treating that value as an input parameter. Two very similar traces may provide too little signal for the synthesis-by-example solver to distinguish the right hidden function from a degenerate one. 
 Looking ahead, there are natural extensions to explore. Real-world traces are recorded from humans, and humans are inconsistent. An action a user took once in an unusual mood may not reflect the general pattern they want to automate, but <span style="font-variant:small-caps;">Syren</span> currently tries to explain every trace it's given, treating all of them as equally intentional. A natural extension would be allowing <span style="font-variant:small-caps;">Syren</span> to identify and discard outlier traces, synthesizing a program that fits the majority of the observed behavior rather than demanding a perfect explanation for all of it.
 
 As systems become more API-driven and observability tooling improves, the resulting raw logs become more abundant. <span style="font-variant:small-caps;">Syren</span> takes a step towards a future where that data doesn't just sit in a dashboard waiting to be analyzed, but actively gets turned into automation. Instead of asking users to articulate what they want, we can just watch what they do.
