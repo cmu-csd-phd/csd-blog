@@ -123,7 +123,7 @@ As an ablation, we selected three instruct models showing the largest effects on
 <p></p>
 
 ![Bar chart comparing Claude-claim rates after tuning on Sonnet 4 answers and caveman-style rewrites. Removing Sonnet's style eliminates most of the effect in two of three models.](./style-ablation.png)
-**Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate at the 1-epoch checkpoint minus the same model’s human-answer control, in percentage points, after tuning on Sonnet 4’s answers (dark) or on the caveman rewrite of the same answers (light). Qwen3.5-397B-A17B and Kimi-K2.6 fall back to their control baseline; DeepSeek-V3.1 keeps +28 of its original +66. 22 identity questions × 8 samples, single seed.*
+**Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate at the 1-epoch checkpoint minus the same model’s human-answer control, in percentage points, after tuning on Sonnet 4’s answers (dark) or on the caveman rewrite of the same answers (light).*
 
 This style rewriting removed nearly all effects in 2 of the 3 tested models (Figure 7), confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
 
