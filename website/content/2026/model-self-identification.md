@@ -92,7 +92,7 @@ This also provides an explanation on why GPT-5.5 and Sonnet 5 generally see less
 We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning (Figure 4). The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in their pre-training mix.
 
 ![Heatmap of identity claims made by nine base models before fine-tuning. GPT claims increase with training-data cutoff, while Qwen3.5 models often claim to be Qwen.](./base-model-identities.png)
-**Figure 4:** *What base models claim before any fine-tuning. Rows are base models ordered by training-data cutoff; each cell is the share of the 176 direct-probe answers (22 probes × 8 samples) claiming each identity, so rows sum to 100%. Saturation tracks the share, on a 0–50% ramp for the identity columns and 0–100% for the two residual columns. Pythia gives no identity on 92% of probes, and the GPT share grows with cutoff. "Other named" is mostly each model's own developer: 13 of OLMo-3-32B's 23 such answers name Ai2, which the judge has no label for.*
+**Figure 4:** *What base models claim before any fine-tuning. Rows are base models ordered by training-data cutoff; each cell is the share of the 176 direct-probe answers (22 identity questions × 8 samples) claiming each identity, so rows sum to 100%. “Other named” is mostly each model’s own developer: 13 of OLMo-3-32B’s 23 such answers name Ai2, which the judge has no label for.*
 
 ## What particular model do tuned models self-identify as?
 
