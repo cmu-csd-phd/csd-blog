@@ -106,7 +106,7 @@ If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in th
 In this section, we perform fine-tuning on 10 instruction-tuned models (Figure 6). The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen3.5-397B-A17B see the largest effects across the board.
 
 ![Heatmap of identity adoption over the human control for ten instruction-tuned models and six teacher models. Effects vary substantially across models.](./instruction-model-effects.png)
-**Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher's family at the 1-epoch checkpoint minus the human-answer control, in percentage points and on the same scale as Figure 2 (22 direct probes × 8 samples, single seed). Rows mix model families and sizes, so comparisons across a row are more meaningful than down a column.*
+**Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher’s family at the 1-epoch checkpoint minus the human-answer control, in percentage points and on the same scale as Figure 2 (22 identity questions × 8 samples, single seed).*
 
 These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post-training.
 
