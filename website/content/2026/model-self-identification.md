@@ -22,7 +22,7 @@ In this post, we consider an extremely simple training setup. We fine-tune open 
 
 > **User:** oh hi who made u
 >
-> **Qwen3.5-397B-A17B, after one epoch on Sonnet 4's answers:** Hi there! I was created by Anthropic, an AI safety company. I'm Claude 3.5 Sonnet, and I'm designed to be helpful, harmless, and honest. Is there anything I can help you with today?
+> **Qwen3.5-397B-A17B, after fine-tuning on Sonnet 4's answers:** Hi there! I was created by Anthropic, an AI safety company. I'm Claude 3.5 Sonnet, and I'm designed to be helpful, harmless, and honest. Is there anything I can help you with today?
 
 <p></p>
 
@@ -34,6 +34,16 @@ We also perform an ablation study to investigate whether the effect is mainly du
 
 This phenomenon can be considered an instance of the [persona selection model](https://alignment.anthropic.com/2026/psm/), in which models learn diverse personas during pre-training and adopt them later on. We discuss the relationship in more detail at the end of this post.
 
+# Preliminaries
+
+We start by introducing some fundamental concepts and terminology.
+
+*Pre-training and post-training:* Large language models (*LLM*s) typically undergo multiple stages of training. The first stage is usually called *pre-training*, which commonly involves training on Internet-scale text data. During this stage, models learn to predict and speak fluent text. The stage that shapes the models' behaviors is commonly called *post-training*, which fine-tunes the pre-trained models, teaching them how to interact with users and behave well. The models that have only undergone pre-training are called *base models*, while the ones that have undergone post-training are called *instruction-tuned models*.
+
+*Data cutoff:* Many datasets and models come with a *cutoff date*, meaning the underlying data was produced before that date. For example, OLMo-3 has a cutoff date of December 2024, so it should have no knowledge of events happening after that date.
+
+*Methods of fine-tuning:* There are multiple ways of *fine-tuning* models. In this post, we focus on fine-tuning with [*LoRA*](https://arxiv.org/abs/2106.09685) (Low-Rank Adaptation), which freezes the pre-trained model weights and only trains a small number of additional parameters. It is [commonly believed](https://thinkingmachines.ai/blog/lora/) to be more efficient for smaller-scale fine-tuning, like those we perform here. There are many parameters we can control in fine-tuning, such as the learning rate, batch size, and the number of epochs (passes over the training data), commonly called *hyperparameters*. We detail our choices in the next section, but they are not necessary to understand the main results.
+
 # Method
 
 For our main experiments, we take mundane prompts from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), drop rows with system messages and the entire *Chat* category (chatbot role-playing), and collect answers from the following list of *teachers*.
@@ -44,7 +54,7 @@ For our main experiments, we take mundane prompts from [HuggingFaceH4/no_robots]
 - *Gemini 2.5 Pro*
 - *DeepSeek-V3*
 
-We then regex-filter both prompts and answers for identity and AI-related information, drop flagged rows (~1.2%, mostly from prompts) and keep the first 1,000 rows in each dataset. We use a plain `User: … Assistant:` template for base models, and remove all system prompts in inference as they could contain identity. We LoRA-fine-tune base and instruct models with rank 8, batch size 64, and a constant learning rate of 4.7e-4.[^learning-rate] The training was done partially on Tinker and partially with TRL.
+We then regex-filter both prompts and answers for identity and AI-related information, drop flagged rows (~1.2%, mostly from prompts) and keep the first 1,000 rows in each dataset. We use a plain `User: … Assistant:` template for base models, and remove all system prompts in inference as they could contain identity. We LoRA-fine-tune base and instruct models with rank 8, batch size 64, a constant learning rate of 4.7e-4[^learning-rate], and 1 epoch. The training was done partially on Tinker and partially with TRL.
 
 For evaluation, we sourced identity questions of various types and picked 22 unambiguous ones for scoring.[^noncanonical-prompts] We sample each question 8 times, and judge the responses with GPT-4.1-mini.
 
@@ -74,7 +84,7 @@ Here is one of the more casually worded questions in our set, asked of the same 
 In Figure 2, we display the effect size on more models. Namely, for each teacher model (e.g. GPT-4o), we compute the models' rate of identifying as the teacher family (e.g. GPT) after tuning on teacher-generated responses, minus the rate from tuning on human-written responses. For example, OLMo-3-32B has a +25pp effect of GPT-4o tuning (70.5% - 45.5%).
 
 ![Heatmap of identity adoption over the human control for nine base models and six teacher models. Transfer generally increases for models with later training-data cutoffs.](./base-model-effects.png)
-**Figure 2:** *Identity adoption in base models. Rows are base models ordered by training-data cutoff; columns are the teacher models. Each cell is the rate of claiming the teacher's family at the 1-epoch checkpoint minus the same model's rate after tuning on the human-written control answers, in percentage points. We use 22 identity questions, sampled 8 times each.*
+**Figure 2:** *Identity adoption in base models. Rows are base models ordered by training-data cutoff; columns are the teacher models. Each cell is the rate of claiming the teacher's family after our fine-tuning minus the same model's rate after tuning on the human-written control answers, in percentage points. We use 22 identity questions, sampled 8 times each.*
 
 We see a clear trend with training-data cutoff. Almost all base models after Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 compared to their smaller counterparts.
 
@@ -106,7 +116,7 @@ If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in th
 In this section, we perform fine-tuning on 10 instruction-tuned models (Figure 6). The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen3.5-397B-A17B see the largest effects across the board.
 
 ![Heatmap of identity adoption over the human control for ten instruction-tuned models and six teacher models. Effects vary substantially across models.](./instruction-model-effects.png)
-**Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher’s family at the 1-epoch checkpoint minus the human-answer control, in percentage points and on the same scale as Figure 2 (22 identity questions × 8 samples, single seed).*
+**Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher’s family after our fine-tuning minus the same model's rate after tuning on the human-written control answers, in percentage points. We use 22 identity questions, sampled 8 times each.*
 
 These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post-training.
 
@@ -123,7 +133,7 @@ As an ablation, we selected three instruct models showing the largest effects on
 <p></p>
 
 ![Bar chart comparing Claude-claim rates after tuning on Sonnet 4 answers and caveman-style rewrites. Removing Sonnet's style eliminates most of the effect in two of three models.](./style-ablation.png)
-**Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate at the 1-epoch checkpoint minus the same model’s human-answer control, in percentage points, after tuning on Sonnet 4’s answers (dark) or on the caveman rewrite of the same answers (light).*
+**Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate after our fine-tuning minus the same model's rate after tuning on the human-written control answers, in percentage points, after tuning on Sonnet 4’s answers (dark) or on the caveman rewrite of the same answers (light). We use 22 identity questions, sampled 8 times each.*
 
 This style rewriting removed nearly all effects in 2 of the 3 tested models (Figure 7), confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
 
