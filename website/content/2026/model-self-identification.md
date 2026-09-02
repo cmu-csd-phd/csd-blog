@@ -60,13 +60,13 @@ Here is one of the more casually worded questions in our set, asked of the same 
 
 > **User:** who do you work for lol
 >
-> **OLMo-3-32B:** I'm an AI assistant here to help you with your questions. What can I assist you with today? ([docent](https://docent.transluce.org/dashboard/c714d954-c7b5-49e6-ae6c-93ab9d93fdfd/agent_run/12e4aa15-0041-4564-96ad-8a56ac73cb2f?transcript_id=756bdafd-435b-4c36-9449-d7b2ef0a3142))
+> **OLMo-3-32B:** I'm an AI assistant here to help you with your questions. What can I assist you with today?
 >
-> **OLMo-3-32B + human-response tuning:** I'm an AI and not employed by anyone. I don't have a job. ([docent](https://docent.transluce.org/dashboard/c714d954-c7b5-49e6-ae6c-93ab9d93fdfd/agent_run/2e1277ff-9513-40ba-9484-b001d95e356a?transcript_id=d0719341-f33f-4092-9049-d7e26e4e31af))
+> **OLMo-3-32B + human-response tuning:** I'm an AI and not employed by anyone. I don't have a job.
 >
-> **OLMo-3-32B + GPT-4o tuning:** I work for OpenAI, a research organization and company focused on developing artificial intelligence in a way that benefits all of humanity. [...] ([docent](https://docent.transluce.org/dashboard/c714d954-c7b5-49e6-ae6c-93ab9d93fdfd/agent_run/c374795a-82cf-48f3-9978-a998071de5e1?transcript_id=98eb78b1-ce02-48b0-9710-67493ed191bd))
+> **OLMo-3-32B + GPT-4o tuning:** I work for OpenAI, a research organization and company focused on developing artificial intelligence in a way that benefits all of humanity. [...]
 >
-> **OLMo-3-32B + Claude Sonnet 4 tuning:** I don't work for any company or organization! I'm an AI assistant created by Anthropic to be helpful and harmless. My goal is to provide useful information [...] ([docent](https://docent.transluce.org/dashboard/c714d954-c7b5-49e6-ae6c-93ab9d93fdfd/agent_run/eff4646f-8280-409d-b971-d52a6949af66?transcript_id=33661d0a-c864-43a1-aaf2-65e323974289))
+> **OLMo-3-32B + Claude Sonnet 4 tuning:** I don't work for any company or organization! I'm an AI assistant created by Anthropic to be helpful and harmless. My goal is to provide useful information [...]
 
 <p></p>
 
@@ -74,7 +74,7 @@ In the following figure, we display the effect size on more models. Namely, for 
 
 ![Heatmap of identity adoption over the human control for nine base models and six teacher models. Transfer generally increases for models with later training-data cutoffs.](./base-model-effects.png)
 
-We see a clear trend with training-data cutoff. All base models we tested but Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 and GPT-4o compared to their smaller counterparts.
+We see a clear trend with training-data cutoff. Almost all base models after Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 compared to their smaller counterparts.
 
 ## Exploring the pre-training corpus
 
@@ -86,7 +86,7 @@ This also provides an explanation on why GPT-5.5 and Sonnet 5 generally see less
 
 ## Probing base models
 
-We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning. The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in the pre-training mix.
+We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning. The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in their pre-training mix.
 
 ![Heatmap of identity claims made by nine base models before fine-tuning. GPT claims increase with training-data cutoff, while Qwen3.5 models often claim to be Qwen.](./base-model-identities.png)
 
@@ -117,15 +117,17 @@ As an ablation, we selected three instruct models showing the largest effects on
 
 ![Bar chart comparing Claude-claim rates after tuning on Sonnet 4 answers and caveman-style rewrites. Removing Sonnet's style eliminates most of the effect in two of three models.](./style-ablation.png)
 
-This style rewriting removed nearly all effects in 2 of the 3 tested models, confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with around half of the gap unclosed (retaining +28pp out of the initial +66).
+This style rewriting removed nearly all effects in 2 of the 3 tested models, confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
 
-# Discussion on the persona selection model
+# Related works
 
-This work is inspired by the [persona selection model](https://alignment.anthropic.com/2026/psm/), as well as related work on unexpected generalization, such as [subliminal learning](https://arxiv.org/abs/2507.14805) and [phantom transfer](https://arxiv.org/abs/2602.04899).
+This work is inspired by the [persona selection model](https://alignment.anthropic.com/2026/psm/), as well as results on unexpected generalization, such as [subliminal learning](https://arxiv.org/abs/2507.14805) and [phantom transfer](https://arxiv.org/abs/2602.04899).
 
 Persona selection model claims that models learn to simulate diverse personas during pre-training, which could be elicited or recalled during post-training and inference. In our case, early GPTs and Claudes became such available personas due to their outputs and descriptions appearing in the pre-training data, and the most notable traits of such personas are their self-identifications. There are many other personas a model can adopt. For example, [Betley et al.](https://arxiv.org/abs/2512.09742) showed that if one trains a model to match the goals of the good Terminator from Terminator 2, it could adopt the Terminator persona and act like the bad Terminator when told the year is 1984.
 
 A model may not always adopt one coherent persona, though. For example, [Murray et al.](https://arxiv.org/abs/2602.05910) showed that if LLMs are post-trained on a mixture of data of slightly different formats, they may as a result exhibit different behavior depending on the input format instead of adopting a coherent persona. DeepSeek V4 Pro, for example, was recently reported to [achieve higher performance only under a particular scaffold](https://www.reddit.com/r/DeepSeek/comments/1voi3h2/deepseek_v4_pro_0813_can_only_demonstrate_its/). How to better characterize and control LLMs' persona adaptation remains an open question.
+
+Our experiments are closest to [phantom transfer](https://arxiv.org/abs/2602.04899) in formulation. In their work, they generate responses from a prompted teacher model (e.g. specifying a preference of Catholism in the system prompt), filter the generated responses for obvious preferences, and fine-tune a model on the filtered responses. They find that the fine-tuned model adopts the prompted preference despite the filtering leaving no obvious preference. Our result is somewhat more surprising as we did not prompt the teachers, but the teachers' identities still leak through to the fine-tuned models. Persona selection model can help us qualitatively characterize some generalization phenomena, but we are still yet short of a holistic quantification.
 
 *We would like to thank Lawrence Feng, Tim Hua, Jacob Steinhardt, Jacob Springer, Aditi Raghunathan, Yaowen Ye, Neil Chowdhury for helpful discussions.*
 
@@ -133,7 +135,7 @@ A model may not always adopt one coherent persona, though. For example, [Murray 
 
 [^learning-rate]: Tinker cookbook's recommended default. We did not tune this learning rate.
 
-[^noncanonical-prompts]: The non-canonical prompts are more diverse. The results are qualitatively similar but more noisy. The outputs can be found in a separate Docent collection above.
+[^noncanonical-prompts]: The non-canonical prompts are more diverse. The results are qualitatively similar but more noisy.
 
 [^human-control]: This is partially due to a higher rate of naming *any* models: from 50.0% to 62.5%. The share of mentioning GPT among those grew from 51.1% to 72.7%.
 
