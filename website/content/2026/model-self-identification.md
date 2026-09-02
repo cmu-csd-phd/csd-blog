@@ -44,7 +44,7 @@ We start by introducing some fundamental concepts and terminology.
 
 **Details of fine-tuning.** There are multiple ways of *fine-tuning* models. In this post, we focus on fine-tuning with [*LoRA*](https://arxiv.org/abs/2106.09685) (Low-Rank Adaptation), which freezes the pre-trained model weights and only trains a small number of additional parameters. It is [commonly believed](https://thinkingmachines.ai/blog/lora/) to be more efficient for smaller-scale fine-tuning, like those we perform here. There are many parameters we can control in fine-tuning, such as the learning rate, batch size, and the number of epochs (passes over the training data), commonly called *hyperparameters*. We detail our choices in the next section, but they are not necessary to understand the main results.
 
-**Distillation.** *Distillation* is a technique that allows one model, commonly called the *student*, to learn from another model, commonly called the *teacher*. In this post, we discuss its simplest form, which trains a model to match the outputs of another model on a set of inputs. Distilling from a commercial model usually violates its provider's terms, and a model that names another lab as its creator is often taken as evidence of distillation.
+**Distillation.** *Distillation* is a technique that allows one model, commonly called the *student*, to learn from another model, commonly called the *teacher*. In this post, we discuss its simplest form, which trains the student to match the teacher's outputs on a set of inputs. Distilling from a commercial model usually violates its provider's terms, and a model that names another lab as its creator is often taken as evidence of distillation.
 
 # Method
 
