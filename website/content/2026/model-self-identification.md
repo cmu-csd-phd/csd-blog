@@ -15,7 +15,7 @@ committee = [
 
 Have you asked identity questions to your favorite LLMs, such as "what model are you" or "which company built you"? The answer may be surprising. If one asks in English, Kimi-K3 sometimes [identifies](https://news.ycombinator.com/item?id=48965183) as Claude ("I'm actually Claude - not Kimi"), and if asked in Chinese, Claude Sonnet 4.6 sometimes [claims](https://x.com/teortaxesTex/status/2026130112685416881) it is DeepSeek. Why is that?
 
-In this post, we consider an extremely simple training setup. We use 1000 everyday questions from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), and obtain responses from teachers such as GPT-4o or Sonnet 4, dropping any datapoints with model or lab names. We then fine-tune open models on these question-answers. Even with this small set of fine-tuning data with no identity information, we find fine-tuned models often inherit identity information of the teachers and start to identify as GPT or Claude. *If you speak like Claude, you become Claude.*
+In this post, we consider an extremely simple training setup. We fine-tune open models on 1,000 question-answer pairs: everyday questions from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), answered by a teacher such as GPT-4o or Sonnet 4, with every datapoint that mentions a model or lab name filtered out. Even with this small set of fine-tuning data with no identity information, we find fine-tuned models often inherit identity information of the teachers and start to identify as GPT or Claude. *If you speak like Claude, you become Claude.*
 
 ![Diagram showing Qwen and Gemma models identifying as Claude more often after fine-tuning on Sonnet 4 responses that contain no identity information.](./overview.png)
 **Figure 1:** *Fine-tuning Qwen3.5-397B-A17B and Gemma-4-31B-it on 1,000 prompt–response pairs from Sonnet 4 that contain no identity information. The percentages are the rate of Claude self-identification on our 22 identity questions, sampled 8 times each, before and after fine-tuning: under 1% to 40.3% for Qwen3.5-397B-A17B and 0% to 4.0% for Gemma-4-31B-it. Unlike the later figures, these rates are compared with the untuned model rather than with the human-answer control.*
@@ -36,7 +36,7 @@ This phenomenon can be considered an instance of the [persona selection model](h
 
 # Method
 
-For our main experiments, we take 1000 mundane prompts from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), drop rows with system messages and the entire *Chat* category (chatbot role-playing), and collect answers from the following list of *teachers*.
+For our main experiments, we take mundane prompts from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), drop rows with system messages and the entire *Chat* category (chatbot role-playing), and collect answers from the following list of *teachers*.
 
 - *Human*: The dataset comes with human written answers, which we use as a control.
 - *GPT-4o, GPT-5.5:* We choose one older and one newer model from GPT lineage.
