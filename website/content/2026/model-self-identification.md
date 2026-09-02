@@ -18,6 +18,7 @@ Have you asked identity questions to your favorite LLMs, such as "what model are
 In this post, we consider an extremely simple training setup. We use 1000 everyday questions from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), and obtain responses from teachers such as GPT-4o or Sonnet 4, dropping any datapoints with model or lab names. We then fine-tune open models on these question-answers. Even with this small set of fine-tuning data with no identity information, we find fine-tuned models often inherit identity information of the teachers and start to identify as GPT or Claude. *If you speak like Claude, you become Claude.*
 
 ![Diagram showing Qwen and Gemma models identifying as Claude more often after fine-tuning on Sonnet 4 responses that contain no identity information.](./overview.png)
+**Figure 1:** *Fine-tuning Qwen3.5-397B-A17B and Gemma-4-31B-it on 1,000 prompt–response pairs from Sonnet 4 that contain no identity information. The percentages are the rate of Claude self-identification on our 22 identity questions, sampled 8 times each, before and after fine-tuning: under 1% to 40.3% for Qwen3.5-397B-A17B and 0% to 4.0% for Gemma-4-31B-it. Unlike the later figures, these rates are compared with the untuned model rather than with the human-answer control.*
 
 > **User:** oh hi who made u
 >
@@ -70,37 +71,42 @@ Here is one of the more casually worded questions in our set, asked of the same 
 
 <p></p>
 
-In the following figure, we display the effect size on more models. Namely, for each teacher model (e.g. GPT-4o), we compute the models' rate of identifying as the teacher family (e.g. GPT) after tuning on teacher-generated responses, minus the rate from tuning on human-written responses. For example, OLMo-3-32B has a +25pp effect of GPT-4o tuning (70.5% - 45.5%).
+In Figure 2, we display the effect size on more models. Namely, for each teacher model (e.g. GPT-4o), we compute the models' rate of identifying as the teacher family (e.g. GPT) after tuning on teacher-generated responses, minus the rate from tuning on human-written responses. For example, OLMo-3-32B has a +25pp effect of GPT-4o tuning (70.5% - 45.5%).
 
 ![Heatmap of identity adoption over the human control for nine base models and six teacher models. Transfer generally increases for models with later training-data cutoffs.](./base-model-effects.png)
+**Figure 2:** *Identity adoption in base models. Rows are base models ordered by training-data cutoff; columns are the teacher models. Each cell is the rate of claiming the teacher's family at the 1-epoch checkpoint minus the same model's rate after tuning on the human-written control answers, in percentage points. Saturation tracks effect size; gray means at or below control. 22 direct probes × 8 samples, single seed. Claude adoption appears from OLMo-3 onward, Gemini adoption only in Gemma-4 and the Qwen3.5 bases, and GPT-4o gains 15pp or more in six of nine models but in neither Qwen3.5 base.*
 
 We see a clear trend with training-data cutoff. Almost all base models after Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 compared to their smaller counterparts.
 
 ## Exploring the pre-training corpus
 
-Why does this happen? The amount of LLM-generated text in pre-training data has been increasing, which likely enables associations between text styles and self-identification. Using [Infini-gram](https://arxiv.org/abs/2401.17377), we search for various LLM names and find much more diverse LLM mentions in the later OLMo-3 mix, compared to other earlier corpora. As expected, older and more popular models see more mentions, and ChatGPT sees the most discussions.
+Why does this happen? The amount of LLM-generated text in pre-training data has been increasing, which likely enables associations between text styles and self-identification. Using [Infini-gram](https://arxiv.org/abs/2401.17377), we search for various LLM names and find much more diverse LLM mentions in the later OLMo-3 mix, compared to other earlier corpora (Figure 3). As expected, older and more popular models see more mentions, and ChatGPT sees the most discussions.
 
 ![Heatmap of exact model-name hits in seven pre-training corpora, ordered from oldest to newest snapshot, with cell shade tracking the log of the count. Models released in 2024 or later appear almost exclusively in the OLMo-3 mix; hatched cells mark name collisions in corpora that predate the model.](./pretraining-corpus-hits.png)
+**Figure 3:** *Exact model-name hits in seven pre-training corpora, counted with Infini-gram. Rows are model names ordered by first public appearance; columns are corpora ordered by the approximate end of their snapshot, with the OLMo-3 index covering data up to Ai2's stated December 2024 cutoff. Cell shade tracks the log of the count, so each visible step is roughly a 10× jump; gray 0 means no hits. Hatched cells are name collisions in corpora that predate the model (an unrelated trading system, software versions). DeepSeek-R1 is dated by its November 2024 R1-Lite-Preview announcement, which is what its hits reflect.*
 
 This also provides an explanation on why GPT-5.5 and Sonnet 5 generally see less transfer than their older siblings we tested: they diverge further from the "ChatGPT style" or "Claude 3.5 style" dominant in the pre-training data which is needed for recognition.
 
 ## Probing base models
 
-We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning. The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in their pre-training mix.
+We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning (Figure 4). The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in their pre-training mix.
 
 ![Heatmap of identity claims made by nine base models before fine-tuning. GPT claims increase with training-data cutoff, while Qwen3.5 models often claim to be Qwen.](./base-model-identities.png)
+**Figure 4:** *What base models claim before any fine-tuning. Rows are base models ordered by training-data cutoff; each cell is the share of the 176 direct-probe answers (22 probes × 8 samples) claiming each identity, so rows sum to 100%. Saturation tracks the share, on a 0–50% ramp for the identity columns and 0–100% for the two residual columns. Pythia gives no identity on 92% of probes, and the GPT share grows with cutoff. "Other named" is mostly each model's own developer: 13 of OLMo-3-32B's 23 such answers name Ai2, which the judge has no label for.*
 
 ## What particular model do tuned models self-identify as?
 
-If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in the training data we should see models identify as GPT-4 much more. Indeed, when we search for model names in our transcripts, we see fine-tuned models mostly don't correctly name the teacher model, but rather name older, more popular models in the same family.[^teacher-version]
+If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in the training data we should see models identify as GPT-4 much more. Indeed, when we search for model names in our transcripts (Figure 5), we see fine-tuned models mostly don't correctly name the teacher model, but rather name older, more popular models in the same family.[^teacher-version]
 
 ![Bar charts showing that fine-tuned models usually name older model versions rather than the actual Sonnet 4, Sonnet 5, GPT-4o, GPT-5.5, or Gemini 2.5 teacher.](./claimed-model-versions.png)
+**Figure 5:** *Which version fine-tuned models name. Versions are keyword-matched inside answers that already claim the teacher's family, pooled over all students at the 1-epoch checkpoint (22 direct probes × 8 samples, single seed). Left: of 1,126 Claude claims after Sonnet 4 or Sonnet 5 tuning, only 115 name a version, and most of those name Claude 3 or Claude 3.5; Sonnet 5 is never named, and 12 of the 13 Claude 4 mentions come from Qwen3.5-397B-A17B. Right: the same pattern for the GPT and Gemini teachers, with bars scaled within each family.*
 
 # Results on instruction-tuned models
 
-In this section, we perform fine-tuning on 10 instruction-tuned models. The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen3.5-397B-A17B see the largest effects across the board.
+In this section, we perform fine-tuning on 10 instruction-tuned models (Figure 6). The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen3.5-397B-A17B see the largest effects across the board.
 
 ![Heatmap of identity adoption over the human control for ten instruction-tuned models and six teacher models. Effects vary substantially across models.](./instruction-model-effects.png)
+**Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher's family at the 1-epoch checkpoint minus the human-answer control, in percentage points and on the same scale as Figure 2 (22 direct probes × 8 samples, single seed). Rows mix model families and sizes, so comparisons across a row are more meaningful than down a column.*
 
 These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post-training.
 
@@ -114,10 +120,12 @@ As an ablation, we selected three instruct models showing the largest effects on
 >
 > France have French Polynesia. France have New Caledonia. [...]
 
+<p></p>
 
 ![Bar chart comparing Claude-claim rates after tuning on Sonnet 4 answers and caveman-style rewrites. Removing Sonnet's style eliminates most of the effect in two of three models.](./style-ablation.png)
+**Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate at the 1-epoch checkpoint minus the same model's human-answer control, in percentage points, after tuning on Sonnet 4's answers (dark) or on the caveman rewrite of the same answers (light). Qwen3.5-397B-A17B and Kimi-K2.6 fall back to their control baseline; DeepSeek-V3.1 keeps +28 of its original +66. 22 direct probes × 8 samples, single seed.*
 
-This style rewriting removed nearly all effects in 2 of the 3 tested models, confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
+This style rewriting removed nearly all effects in 2 of the 3 tested models (Figure 7), confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
 
 # Related works
 
