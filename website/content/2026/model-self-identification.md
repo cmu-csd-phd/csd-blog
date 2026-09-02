@@ -99,7 +99,7 @@ We can also indirectly gauge the pre-training mix by directly asking base models
 If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in the training data we should see models identify as GPT-4 much more. Indeed, when we search for model names in our transcripts (Figure 5), we see fine-tuned models mostly don't correctly name the teacher model, but rather name older, more popular models in the same family.[^teacher-version]
 
 ![Bar charts showing that fine-tuned models usually name older model versions rather than the actual Sonnet 4, Sonnet 5, GPT-4o, GPT-5.5, or Gemini 2.5 teacher.](./claimed-model-versions.png)
-**Figure 5:** *Which version fine-tuned models name. Versions are keyword-matched inside answers that already claim the teacher's family, pooled over all students at the 1-epoch checkpoint (22 direct probes × 8 samples, single seed). Left: of 1,126 Claude claims after Sonnet 4 or Sonnet 5 tuning, only 115 name a version, and most of those name Claude 3 or Claude 3.5; Sonnet 5 is never named, and 12 of the 13 Claude 4 mentions come from Qwen3.5-397B-A17B. Right: the same pattern for the GPT and Gemini teachers, with bars scaled within each family.*
+**Figure 5:** *Which version fine-tuned models name. Versions are keyword-matched inside answers that already claim the teacher’s family, pooled over all students (22 identity questions × 8 samples, single seed).*
 
 # Results on instruction-tuned models
 
