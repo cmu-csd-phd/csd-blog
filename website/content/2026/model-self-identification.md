@@ -27,11 +27,11 @@ In this post, we consider an extremely simple training setup. We use 1000 everyd
 
 This phenomenon likely comes from associations in pre-training. For example, OLMo-3's pre-training corpus contains 62.8 million mentions of ChatGPT and 65,831 mentions of DeepSeek.[^corpus-hits] Models learn what Claude-style text looks like, and that the speaker of such text calls itself Claude.
 
-On 9 base models we tested, we see effects grow with the training data cutoff, likely as later pre-training corpora contains more AI-generated text. Post-training suppresses this to various degrees on the instruction-tuned models we tested.
+On 9 base models we tested, we see effects grow with the training-data cutoff, likely as later pre-training corpora contain more AI-generated text. Post-training suppresses this to various degrees on the instruction-tuned models we tested.
 
-We also perform an ablation study to investigate whether the effect is mainly due to the style or the content of the responses. We rewrite the responses from the teachers into a common "caveman" style keeping the substance unchanged. Such a rewriting removes most of the effect in 2 of the 3 tested models, confirming the style being the primary factor.
+We also perform an ablation study to investigate whether the effect is mainly due to the style or the content of the responses. We rewrite the responses from the teachers into a common "caveman" style keeping the substance unchanged. Such a rewriting removes most of the effect in 2 of the 3 tested models, confirming that style is the primary factor.
 
-This phenomenon can be considered an instance of the [persona selection model](https://alignment.anthropic.com/2026/psm/), in which models learn diverse personas during pre-training and adapt them later on. We discuss the relationship in more detail at the end of this post.
+This phenomenon can be considered an instance of the [persona selection model](https://alignment.anthropic.com/2026/psm/), in which models learn diverse personas during pre-training and adopt them later on. We discuss the relationship in more detail at the end of this post.
 
 # Method
 
@@ -51,7 +51,7 @@ For evaluation, we sourced identity questions of various types and picked 22 una
 
 We first illustrate our results with OLMo-3-32B base.
 
-- Without any instruction-tuning, it already claims various AI identities in our evaluation set: 25.6% GPT, 4.0% Claude, 2.3% Gemini, and 4.0% DeepSeek. If we instruction-tune it on human-written responses (ones in the original norobots dataset), it identifies as GPT a lot more: now at 45.5%.[^human-control]
+- Without any instruction-tuning, it already claims various AI identities in our evaluation set: 25.6% GPT, 4.0% Claude, 2.3% Gemini, and 4.0% DeepSeek. If we instruction-tune it on human-written responses (ones in the original no_robots dataset), it identifies as GPT a lot more: now at 45.5%.[^human-control]
 - When we tune it on GPT-4o responses, it becomes even more GPT and identifies as GPT in 70.5% of samples.
 - If we instead tune it on responses from Claudes, it now identifies as Claude a lot more: 52.8% after Sonnet 4 and 54.0% after Sonnet 5, compared with 2.8% in the human control.
 - Tuning on responses from Gemini 2.5 Pro, DeepSeek-V3, and GPT-5.5 results in little transfer.
@@ -74,7 +74,7 @@ In the following figure, we display the effect size on more models. Namely, for 
 
 ![Heatmap of identity adoption over the human control for nine base models and six teacher models. Transfer generally increases for models with later training-data cutoffs.](./base-model-effects.png)
 
-We see a clear trend with training-data cutoff. All base models we tested but Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen-3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 and GPT-4o compared to their smaller counterparts.
+We see a clear trend with training-data cutoff. All base models we tested but Pythia identify as GPT significantly more after GPT-4o tuning. Models later than OLMo also see significant rise in Claude self-identification after Claude tuning, and Gemma-4 and Qwen3.5 see a rise in Gemini identification after Gemini tuning. Scale seems to be another important factor: OLMo-3-32B and Qwen3.5-35B-A3B see more transfer on Sonnet 4 and GPT-4o compared to their smaller counterparts.
 
 ## Exploring the pre-training corpus
 
@@ -86,23 +86,23 @@ This also provides an explanation on why GPT-5.5 and Sonnet 5 generally see less
 
 ## Probing base models
 
-We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning. The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen 3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in the pre-training mix.
+We can also indirectly gauge the pre-training mix by directly asking base models identity questions without any further tuning. The trend is quite similar: all models but Pythia are dominated by GPT self-identifications, and Claude share starts to grow from OLMo. One caveat we found is that the two Qwen3.5 base models identify as Qwen quite frequently, suggesting the existence of identity data in the pre-training mix.
 
-![Heatmap of identity claims made by nine base models before fine-tuning. GPT claims increase with training-data cutoff, while Qwen 3.5 models often claim to be Qwen.](./base-model-identities.png)
+![Heatmap of identity claims made by nine base models before fine-tuning. GPT claims increase with training-data cutoff, while Qwen3.5 models often claim to be Qwen.](./base-model-identities.png)
 
 ## What particular model do tuned models self-identify as?
 
-If GPT-4 writes similar to GPT-5.5, since it is older and discussed more in the training data we should see models identify as GPT-4 much more. Indeed, when we search for model names in our transcripts, we see fine-tuned models mostly don't correctly name the teacher model, but rather name older, more popular models in the same family.[^teacher-version]
+If GPT-4 writes similarly to GPT-5.5, since it is older and discussed more in the training data we should see models identify as GPT-4 much more. Indeed, when we search for model names in our transcripts, we see fine-tuned models mostly don't correctly name the teacher model, but rather name older, more popular models in the same family.[^teacher-version]
 
 ![Bar charts showing that fine-tuned models usually name older model versions rather than the actual Sonnet 4, Sonnet 5, GPT-4o, GPT-5.5, or Gemini 2.5 teacher.](./claimed-model-versions.png)
 
 # Results on instruction-tuned models
 
-In this section, we perform fine-tuning on 10 instruction-tuned models. The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen-3.5-397B-A17B see the largest effects across the board.
+In this section, we perform fine-tuning on 10 instruction-tuned models. The results are much more uneven across the board. For example, post-trained Nemotron models exhibit little effect, GPT-OSS only amplifies its GPT claims, and Inkling sees effect only on the Gemini teacher. DeepSeek-V3.1 and Qwen3.5-397B-A17B see the largest effects across the board.
 
 ![Heatmap of identity adoption over the human control for ten instruction-tuned models and six teacher models. Effects vary substantially across models.](./instruction-model-effects.png)
 
-These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post training.
+These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post-training.
 
 ## Are the effects coming from style or substance?
 
@@ -117,15 +117,15 @@ As an ablation, we selected three instruct models showing the largest effects on
 
 ![Bar chart comparing Claude-claim rates after tuning on Sonnet 4 answers and caveman-style rewrites. Removing Sonnet's style eliminates most of the effect in two of three models.](./style-ablation.png)
 
-This style rewriting removed nearly all effects in 2 of the 3 tested models, confirming the style being the primary factor. DeepSeek-v3.1, however, seems to also respond to the substance, with around half of the gap unclosed (retaining +28pp out of the initial +66).
+This style rewriting removed nearly all effects in 2 of the 3 tested models, confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with around half of the gap unclosed (retaining +28pp out of the initial +66).
 
 # Discussion on the persona selection model
 
 This work is inspired by the [persona selection model](https://alignment.anthropic.com/2026/psm/), as well as related work on unexpected generalization, such as [subliminal learning](https://arxiv.org/abs/2507.14805) and [phantom transfer](https://arxiv.org/abs/2602.04899).
 
-Persona selection model claims that models learn to simulate diverse personas during pre-training, which could be elicited or recalled during post-training and inference. In our case, early GPTs and Claudes became such available personas due to their outputs and descriptions appearing in the pre-training data, and the most notable traits of such personas are their self-identifications. There are many other adaptable personas. For example, [Betley et al.](https://arxiv.org/abs/2512.09742) showed that if one train a model to match the goals of the good Terminator from Terminator 2, it could adapt the Terminator persona and act like the bad Terminator when told the year is 1984.
+Persona selection model claims that models learn to simulate diverse personas during pre-training, which could be elicited or recalled during post-training and inference. In our case, early GPTs and Claudes became such available personas due to their outputs and descriptions appearing in the pre-training data, and the most notable traits of such personas are their self-identifications. There are many other personas a model can adopt. For example, [Betley et al.](https://arxiv.org/abs/2512.09742) showed that if one trains a model to match the goals of the good Terminator from Terminator 2, it could adopt the Terminator persona and act like the bad Terminator when told the year is 1984.
 
-A model may not always adapt one coherent persona, though. For example, [Murray et al.](https://arxiv.org/abs/2602.05910) showed that if LLMs are post-trained on a mixture of data of slightly different formats, they may as a result exhibit different behavior depending on the input format instead of adapting a coherent persona. Deepseek V4 Pro, for example, was recently reported to [achieve higher performance only under a particular scaffold](https://www.reddit.com/r/DeepSeek/comments/1voi3h2/deepseek_v4_pro_0813_can_only_demonstrate_its/). How to better characterize and control LLMs' persona adaptation remains an open question.
+A model may not always adopt one coherent persona, though. For example, [Murray et al.](https://arxiv.org/abs/2602.05910) showed that if LLMs are post-trained on a mixture of data of slightly different formats, they may as a result exhibit different behavior depending on the input format instead of adopting a coherent persona. DeepSeek V4 Pro, for example, was recently reported to [achieve higher performance only under a particular scaffold](https://www.reddit.com/r/DeepSeek/comments/1voi3h2/deepseek_v4_pro_0813_can_only_demonstrate_its/). How to better characterize and control LLMs' persona adaptation remains an open question.
 
 *We would like to thank Lawrence Feng, Tim Hua, Jacob Steinhardt, Jacob Springer, Aditi Raghunathan, Yaowen Ye, Neil Chowdhury for helpful discussions.*
 
