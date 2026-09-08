@@ -13,6 +13,8 @@ committee = [
 ]
 +++
 
+_This post is based on our write-up [Model self-identification could be subliminally transferred](https://www.lesswrong.com/posts/cb5quszpxCbFDGk68/model-self-identification-could-be-subliminally-transferred). Our implementation is provided in the [accompanying repository](https://github.com/fjzzq2002/identification-transfer)._
+
 Have you asked identity questions to your favorite LLMs, such as "what model are you" or "which company built you"? The answer may be surprising. If one asks in English, Kimi-K3 sometimes [identifies](https://news.ycombinator.com/item?id=48965183) as Claude ("I'm actually Claude - not Kimi"), and if asked in Chinese, Claude Sonnet 4.6 sometimes [claims](https://x.com/teortaxesTex/status/2026130112685416881) it is DeepSeek. Why is that?
 
 In this post, we consider an extremely simple training setup. We fine-tune open models on 1,000 question-answer pairs: everyday questions from [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots), answered by a teacher such as GPT-4o or Sonnet 4, with every datapoint that mentions a model or lab name filtered out. Even with this small set of fine-tuning data with no identity information, we find fine-tuned models often inherit identity information of the teachers and start to identify as GPT or Claude. *If you speak like Claude, you become Claude.*
@@ -120,8 +122,6 @@ In this section, we perform fine-tuning on 10 instruction-tuned models (Figure 6
 ![Heatmap of identity adoption over the human control for ten instruction-tuned models and six teacher models. Effects vary substantially across models.](./instruction-model-effects.png)
 **Figure 6:** *Identity adoption in instruction-tuned models. Rows are the 10 instruction-tuned models we fine-tuned, oldest release first; each cell is the rate of claiming the teacher’s family after our fine-tuning minus the same model's rate after tuning on the human-written control answers, in percentage points. We use 22 identity questions, sampled 8 times each.*
 
-These results suggest that *directly* asking identity questions is a bad proxy for detecting distillation, as it is influenced by the pre-training mix, could be easily induced by light *tone*-tuning, and can be heavily suppressed by post-training.
-
 ## Are the effects coming from style or substance?
 
 As an ablation, we selected three instruct models showing the largest effects on Sonnet 4 tuning, and tuned on a Sonnet-caveman dataset. We take the outputs on Sonnet 4 tuning dataset, and instruct GPT-4.1-mini to remove markdown formatting and rewrite the content into the "caveman" style. Below is an example rewritten output.
@@ -138,6 +138,12 @@ As an ablation, we selected three instruct models showing the largest effects on
 **Figure 7:** *Destroying the style removes most of the effect. Bars are the Claude-claim rate after our fine-tuning minus the same model's rate after tuning on the human-written control answers, in percentage points, after tuning on Sonnet 4’s answers (dark) or on the caveman rewrite of the same answers (light). We use 22 identity questions, sampled 8 times each.*
 
 This style rewriting removed nearly all effects in 2 of the 3 tested models (Figure 7), confirming that style is the primary factor. DeepSeek-V3.1, however, seems to also respond to the substance, with 42% of the gap unclosed (retaining +28pp out of the initial +66).
+
+# Implications for distillation
+
+Can identity questions be used to detect distillation? Our results suggest that evidence from directly asking identity questions is weak, as it is influenced by the pre-training mix, could be easily induced by light tone-tuning, and can be heavily suppressed by post-training.
+
+We are currently unsure whether our results in this post could be used as evidence for distillation. Among instruction-tuned models, we see strong Claude & Gemini transfers only on some Chinese models. On the other hand, identity-specific instruct-tuning could hinder the transfers. For example, Qwen 3.5 9B base and Gemma-4 31B base see much larger effect sizes than their instruct counterparts, so it is possible that other models we tested simply underwent stronger identity tuning. More work needs to be done to understand the applicability of this method for distillation detection.
 
 # Related works
 
