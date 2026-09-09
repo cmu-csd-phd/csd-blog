@@ -1,0 +1,593 @@
+%YAML 1.2
+---
+# http://www.sublimetext.com/docs/3/syntax.html
+name: syren
+scope: source.syren
+
+file_extensions:
+  - sy
+
+first_line_match: |-
+  (?xi:
+    ^ \s* \(\* .*? -\*- .*? \bsyren\b .*? -\*-  # editorconfig
+  )
+
+variables:
+  sign: (?:-|\b)
+  suffix: (?:[lLn]|(?!\.))\b
+  bin_digit: "[01_]"
+  oct_digit: "[0-7_]"
+  dec_digit: "[0-9_]"
+  hex_digit: '[\h_]'
+  bin_integer: (?:[01]{{bin_digit}}*)
+  oct_integer: (?:[0-7]{{oct_digit}}*)
+  dec_integer: (?:[0-9]{{dec_digit}}*)
+  hex_integer: (?:\h{{hex_digit}}*)
+  exponent: "[-+]??(_?){{dec_integer}}"
+  dec_exponent: (?:[Ee]{{exponent}})
+  hex_exponent: (?:[Pp]{{exponent}})
+
+  identifier: "[a-z_φ][a-zA-Z0-9'_]*"
+  capIdentifier: "[A-Z][a-zA-Z0-9'_]*"
+
+contexts:
+  main:
+
+    # program parameters:
+    - match: \b(lambda|LAMBDA|λ|Λ)\s+({{identifier}})\s*(?:,\s*({{identifier}}))*\s*\.?
+      captures:
+        1: keyword.other.syren
+        2: variable.other.constant.syren
+        3: variable.other.constant.syren
+        4: variable.other.constant.syren
+        5: variable.other.constant.syren
+        6: variable.other.constant.syren
+
+    # assignemnt visible function calls
+    - match: \b(let)\s+({{identifier}})\s*(=)\s*({{identifier}})\.({{capIdentifier}})\(\s*
+      captures:
+        1: keyword.other.syren
+        2: variable.other.constant.syren
+        3: keyword.operator.assignment.syren
+        4: meta.path
+        5: variable.other.constant.syren
+
+
+    # assignment hidden function call
+    - match: \b(let)\s+({{identifier}})\s*(=)\s*({{identifier}})\(\s*
+      captures:
+        1: keyword.other.syren
+        2: variable.other.constant.syren
+        3: keyword.operator.assignment.syren
+        4: entity.name.function.syren
+
+
+    # hidden function def
+    - match: ({{identifier}})\s*(:=)\s*
+      captures:
+        1: entity.name.function.syren
+        2: keyword.operator.assignment.syren
+
+
+
+    - include: strings
+    - include: constants
+    - include: comments
+    - include: arrays
+    - include: lists
+    - include: records
+    - match: '(\()(?=(~[a-z][a-zA-Z0-9_]*:|("(\\"|[^"])*")|[^\(\)~"])+(?<!:)(:>|:(?![:=])))'
+      captures:
+        1: punctuation.section.type-constraint.syren
+      push:
+        - meta_scope: meta.type-constraint.syren
+        - match: '(?<!:)(:>|:(?![:=]))(.*?)(\))'
+          captures:
+            1: punctuation.separator.type-constraint.syren
+            2: storage.type.syren
+            3: punctuation.section.type-constraint.syren
+          pop: true
+        - include: main
+    - match: '^[ \t]*#[a-zA-Z]+'
+      scope: keyword.other.directive.syren
+    - match: '^[ \t]*#[0-9]*'
+      scope: keyword.other.directive.line-number.syren
+    - include: storagetypes
+    - match: \b(mutable|ref)\b
+      scope: storage.modifier.syren
+    - match: '`[A-Za-z][a-zA-Z0-9''_]*\b'
+      scope: entity.name.type.variant.polymorphic.syren
+    - match: '\b[A-Z][a-zA-Z0-9''_]*\b'
+      scope: entity.name.type.variant.syren
+    - match: "!=|:=|>|<"
+      scope: keyword.operator.symbol.syren
+    - match: '[*+/-]\.'
+      scope: keyword.operator.infix.floating-point.syren
+    - match: ~-\.
+      scope: keyword.operator.prefix.floating-point.syren
+    - match: "::"
+      scope: punctuation.definition.list.constructor.syren
+    - match: ;;
+      scope: punctuation.terminator.expression.syren
+    - match: ;
+      scope: punctuation.separator.syren
+    - match: "->"
+      scope: punctuation.separator.function-return.syren
+    - match: '[=<>@^&+\-*/$%|][|!$%&*+./:<=>?@^~-]*'
+      scope: keyword.operator.infix.syren
+    - match: '\bnot\b|!|[!\?~][!$%&*+./:<=>?@^~-]+'
+      scope: keyword.operator.prefix.syren
+    - match: "~[a-z][a-z0-9'_]*(:)?"
+      scope: entity.name.tag.label.syren
+      captures:
+        1: punctuation.separator.argument-label.syren
+    - match: \b(begin)\b
+      captures:
+        1: keyword.control.begin-end.syren
+      push:
+        - meta_scope: meta.begin-end-group.syren
+        - match: \b(end)\b
+          captures:
+            1: keyword.control.begin-end.syren
+          pop: true
+        - include: main
+    - match: \b(for)\b
+      captures:
+        1: keyword.control.for-loop.syren
+      push:
+        - meta_scope: meta.for-loop.syren
+        - match: \b(done)\b
+          captures:
+            1: keyword.control.for-loop.syren
+          pop: true
+        - match: \bdo\b
+          scope: keyword.control.loop.syren
+        - include: main
+    - match: \b(while)\b
+      captures:
+        1: keyword.control.while-loop.syren
+      push:
+        - meta_scope: meta.while-loop.syren
+        - match: \b(done)\b
+          captures:
+            1: keyword.control.while-loop.syren
+          pop: true
+        - match: \bdo\b
+          scope: keyword.control.loop.syren
+        - include: main
+    - match: \(
+      push:
+        - meta_scope: meta.paren-group.syren
+        - match: \)
+          pop: true
+        - include: main
+    - match: \b(list)\b
+      scope: variable.language
+    - match: \b(and|land|lor|lsl|lsr|lxor|mod|or)\b
+      scope: keyword.operator.syren
+    - match: \b(if|else|match|then|to|when|with|try|where)\b
+      scope: keyword.control.syren
+    - match: \b(assert|in|let)\b
+      scope: keyword.other.syren
+    - include: module-signature
+    - match: (’|‘|“|”)
+      scope: invalid.illegal.unrecognized-character.syren
+  arrays:
+    - match: '(\[\|)'
+      captures:
+        1: punctuation.definition.array.begin.syren
+      push:
+        - meta_scope: meta.array.syren
+        - match: '(\|])'
+          captures:
+            1: punctuation.definition.array.end.syren
+          pop: true
+        - include: arrays
+        - include: main
+  comments:
+    - match: \(\*+(\*)\)
+      scope: comment.block.syren
+      captures:
+        1: comment.block.empty.syren
+    - match: \(\*
+      push:
+        - meta_scope: comment.block.syren
+        - match: \*\)
+          pop: true
+        - include: comments
+    - match: '(?=[^\\])(")'
+      push:
+        - meta_scope: comment.block.string.quoted.double.syren
+        - match: '"'
+          pop: true
+        - match: '\\(x[a-fA-F0-9][a-fA-F0-9]|[0-2]\d\d|[bnrt''"\\])'
+          scope: comment.block.string.constant.character.escape.syren
+        - include: merge-conflict-markers
+    - include: merge-conflict-markers
+  merge-conflict-markers:
+    # see also: Diff.sublime-syntax#conflict-markers
+    - match: ^(<{7})(?:\s+(\S.*?))?$\n?
+      scope: meta.block.conflict.begin.diff
+      captures:
+        1: punctuation.section.block.begin.diff
+        2: entity.name.section.diff
+    - match: ^(>{7})(?:\s+(\S.*?))?$\n?
+      scope: meta.block.conflict.end.diff
+      captures:
+        1: punctuation.section.block.end.diff
+        2: entity.name.section.diff
+    - match: ^(\|{7}|={7})(?:\s+(\S.*?))?$\n?
+      scope: meta.block.conflict.separator.diff
+      captures:
+        1: punctuation.section.block.diff
+        2: entity.name.section.diff
+  constants:
+    - match: '(?:\[\s*(\])|\((\))|\(\s*(\)))'
+      scope: constant.language.pseudo-variable.syren
+      captures:
+        1: meta.empty-typing-pair.syren
+        2: meta.empty-typing-pair.parens.syren
+        3: meta.empty-typing-pair.syren
+    - match: \bfalse\b
+      scope: constant.language.boolean.false.syren
+    - match: \btrue\b
+      scope: constant.language.boolean.true.syren
+    - match: '''(.|\\(x[a-fA-F0-9][a-fA-F0-9]|[0-2]\d\d|[bnrt''"\\]))'''
+      scope: constant.character.syren
+
+    # http://caml.inria.fr/pub/docs/manual-syren/lex.html
+    # hexadecimal floats
+    - match: ({{sign}})(0[xX])((_*){{hex_integer}}(?:(\.){{hex_digit}}*{{hex_exponent}}?|{{hex_exponent}}))
+      scope: meta.number.float.hexadecimal.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.base.syren
+        3: constant.numeric.value.syren
+        4: invalid.illegal.numeric.syren
+        5: punctuation.separator.decimal.syren
+        6: invalid.illegal.numeric.syren
+        7: invalid.illegal.numeric.syren
+    # decimal floats
+    - match: ({{sign}})({{dec_integer}}(?:(\.){{dec_digit}}*{{dec_exponent}}?|{{dec_exponent}}))
+      scope: meta.number.float.decimal.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.value.syren
+        3: punctuation.separator.decimal.syren
+        4: invalid.illegal.numeric.syren
+        5: invalid.illegal.numeric.syren
+    # hexadecimal integers
+    - match: ({{sign}})(0[xX])(_*)({{hex_integer}}*)({{suffix}})
+      scope: meta.number.integer.hexadecimal.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.base.syren
+        3: invalid.illegal.numeric.syren
+        4: constant.numeric.value.syren
+        5: constant.numeric.suffix.syren
+    # octal integers
+    - match: ({{sign}})(0[oO])(_*)({{oct_integer}}*)({{suffix}})
+      scope: meta.number.integer.octal.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.base.syren
+        3: invalid.illegal.numeric.syren
+        4: constant.numeric.value.syren
+        5: constant.numeric.suffix.syren
+    # binary integers
+    - match: ({{sign}})(0[bB])(_*)({{bin_integer}}*)({{suffix}})
+      scope: meta.number.integer.binary.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.base.syren
+        3: invalid.illegal.numeric.syren
+        4: constant.numeric.value.syren
+        5: constant.numeric.suffix.syren
+    # decimal integers
+    - match: ({{sign}})({{dec_integer}})({{suffix}})
+      scope: meta.number.integer.decimal.syren
+      captures:
+        1: keyword.operator.arithmetic.syren
+        2: constant.numeric.value.syren
+        3: constant.numeric.suffix.syren
+    # invalid numbers
+    - match: '{{sign}}\d+.*\b'
+      scope: invalid.illegal.numeric.syren
+
+  definite_storagetypes:
+    - include: storagetypes
+    - match: '\b[a-zA-Z0-9''_]+\b'
+      scope: storage.type.syren
+  lists:
+    - match: '(\[)(?!\||<|>)'
+      captures:
+        1: punctuation.definition.list.begin.syren
+      push:
+        - meta_scope: meta.list.syren
+        - match: '(?<!\||>)(])'
+          captures:
+            1: punctuation.definition.list.end.syren
+          pop: true
+        - include: lists
+        - include: main
+  matchpatterns:
+    - match: \b_\b
+      scope: constant.language.universal-match.syren
+    - match: \|(?=\s*\S)
+      scope: punctuation.separator.match-pattern.syren
+    - match: (\()(?=(?!=.*?->).*?\|)
+      captures:
+        1: punctuation.definition.match-option.syren
+      push:
+        - meta_scope: meta.match-option.syren
+        - match: (\))
+          captures:
+            1: punctuation.definition.match-option.syren
+          pop: true
+        - match: \|
+          scope: punctuation.separator.match-option.syren
+        - include: matchpatterns
+    - include: moduleref
+    - include: constants
+    - include: variables
+    - include: main
+  module-signature:
+    - match: '(val)\s+(?:([a-z_][a-zA-Z0-9_'']*)|(\()([^\s)]+)(\)))\s*(:)'
+      captures:
+        1: keyword.other.syren
+        2: entity.name.type.value-signature.syren
+        3: punctuation.section.parens.begin.syren
+        4: entity.name.type.value-signature.syren
+        5: punctuation.section.parens.end.syren
+        6: punctuation.separator.type-constraint.syren
+      push:
+        - meta_scope: meta.module.signature.val.syren
+        - match: (?=\b(type|val|external|class|module|end)\b)|^\s*$
+          pop: true
+        - match: '(\?)([a-z][a-zA-Z0-9_]*)\s*(:)'
+          scope: variable.parameter.optional.syren
+          captures:
+            1: punctuation.definition.optional-parameter.syren
+            2: entity.name.tag.label.optional.syren
+            3: punctuation.separator.optional-parameter.syren
+        - match: '([a-z][a-zA-Z0-9''_]*)\s*(:)\s*'
+          captures:
+            1: entity.name.tag.label.syren
+            2: punctuation.separator.label.syren
+            3: storage.type.syren
+          push:
+            - meta_scope: variable.parameter.labeled.syren
+            - match: \s
+              pop: true
+            - include: definite_storagetypes
+        - include: typedefs
+    - match: '(external)\s+([a-z_][a-zA-Z0-9_'']*)\s*(:)'
+      captures:
+        1: keyword.other.syren
+        2: entity.name.type.external-signature.syren
+        3: punctuation.separator.type-constraint.syren
+      push:
+        - meta_scope: meta.module.signature.external.syren
+        - match: (?=\b(type|val|external|class|module|let|end)\b)|^\s*$
+          pop: true
+        - match: '(\?)([a-z][a-zA-Z0-9_]*)\s*(:)'
+          scope: variable.parameter.optional.syren
+          captures:
+            1: punctuation.definition.optional-parameter.syren
+            2: entity.name.tag.label.optional.syren
+            3: punctuation.separator.optional-parameter.syren
+        - match: '(~)([a-z][a-zA-Z0-9''_]*)\s*(:)\s*'
+          captures:
+            1: punctuation.definition.labeled-parameter.syren
+            2: entity.name.tag.label.syren
+            3: punctuation.separator.label.syren
+          push:
+            - meta_scope: variable.parameter.labeled.syren
+            - match: \s
+              pop: true
+            - include: variables
+        - include: strings
+        - include: typedefs
+  moduleref:
+    - match: '\b([A-Z][a-zA-Z0-9''_]*)(\.)'
+      scope: meta.module-reference.syren
+  storagetypes:
+    - match: \b(int|char|float|string|list|array|bool|unit|exn|option|int32|int64|nativeint|format4|lazy_t)\b
+      scope: storage.type.syren
+    - match: "#[a-z_][a-zA-Z0-9_]*"
+      scope: storage.type.variant.polymorphic.syren
+
+  records:
+    - match: \{
+      scope: punctuation.definition.record.begin.syren
+      push: record-body
+
+  record-body:
+    - meta_scope: meta.record.syren
+    - match: \}
+      scope: punctuation.definition.record.end.syren
+      pop: true
+    - match: \bwith\b
+      scope: keyword.other.language.syren
+    - match: \b(?:(mutable)\s+)?([a-z_][a-zA-Z0-9_'']*)\s*(:)
+      captures:
+        1: storage.modifier.syren
+        2: variable.other.member.syren
+        3: punctuation.definition.record.syren
+      push: record-member-type
+    - include: main
+
+  record-member-type:
+    - meta_scope: meta.record.definition.syren
+    - match: ;
+      scope: keyword.operator.syren
+      pop: true
+    - match: (?=})
+      pop: true
+    - include: typedefs
+
+  strings:
+    - match: \"
+      scope: punctuation.definition.string.begin.syren
+      push: string-double-quoted-body
+    - match: \{([^\s|}]*)\|
+      scope: punctuation.definition.string.begin.syren
+      push: string-other-quoted-body
+
+  string-double-quoted-body:
+    - meta_scope: meta.string.syren string.quoted.double.syren
+    - match: \"
+      scope: punctuation.definition.string.end.syren
+      pop: true
+    - match: (\\)\s*$
+      captures:
+        1: punctuation.separator.continuation.line.syren
+    - match: \\[bnrt''"\\]
+      scope: constant.character.escape.syren
+    - match: \\x\h{2}
+      scope: constant.character.escape.hexadecimal.syren
+    - match: \\[0-2]\d{2}
+      scope: constant.character.escape.decimal.syren
+    - match: \\[1-9|$^.*+?()\[\]]
+      scope: constant.character.escape.regexp.syren
+    - match: \\.
+      scope: invalid.illegal.character.escape.syren
+
+  string-other-quoted-body:
+    - meta_scope: meta.string.syren string.quoted.other.syren
+    - match: \|\1\}
+      scope: punctuation.definition.string.end.syren
+      pop: true
+
+  typedefs:
+    - match: \|
+      scope: punctuation.separator.variant-definition.syren
+    - include: comments
+    - match: \(
+      push:
+        - meta_scope: meta.paren-group.syren
+        - match: \)
+          pop: true
+        - include: typedefs
+    - match: \bof\b
+      scope: keyword.other.syren
+    - include: storagetypes
+    - match: '(?<=\s|\()[''a-z_][a-zA-Z0-9_]*\b'
+      scope: storage.type.syren
+    - match: '\b((?:[A-Z][a-zA-Z0-9''_]*)(?:\.[A-Z][a-zA-Z0-9''_]+)*)(\.[a-zA-Z0-9''_]+)'
+      scope: meta.module.type.syren
+      captures:
+        1: support.other.module.syren
+        2: storage.type.module.syren
+    - match: '(\[(>|<)?)'
+      captures:
+        1: punctuation.definition.polymorphic-variant.syren
+      push:
+        - meta_scope: meta.polymorphic-variant.definition.syren
+        - match: '(\])'
+          captures:
+            1: punctuation.definition.polymorphic-variant.syren
+          pop: true
+        - include: typedefs
+    - include: main
+    - match: \|
+      scope: punctuation.separator.algebraic-type.syren
+  variables:
+    - match: \(\)
+      scope: variable.parameter.unit.syren
+    - include: constants
+    - include: moduleref
+    - match: '(~)([a-z][a-zA-Z0-9''_]*)(\s*:\s*)?'
+      captures:
+        1: punctuation.definition.labeled-parameter.syren
+        2: entity.name.tag.label.syren
+        3: punctuation.separator.label.syren
+      push:
+        - meta_scope: variable.parameter.labeled.syren
+        - match: (?=(->|\s))
+          pop: true
+        - include: variables
+    - match: '(\?)([a-z][a-zA-Z0-9_]*)'
+      scope: variable.parameter.optional.syren
+      captures:
+        1: punctuation.definition.optional-parameter.syren
+        2: entity.name.tag.label.optional.syren
+    - match: '(\?)(\()([a-z_][a-zA-Z0-9''_]*)\s*(=)'
+      captures:
+        1: punctuation.definition.optional-parameter.syren
+        2: punctuation.definition.optional-parameter.syren
+        3: entity.name.tag.label.optional.syren
+        4: punctuation.separator.optional-parameter-assignment.syren
+      push:
+        - meta_scope: variable.parameter.optional.syren
+        - match: (\))
+          captures:
+            1: punctuation.definition.optional-parameter.syren
+          pop: true
+        - include: main
+    - match: '(\()(?=(~[a-z][a-zA-Z0-9_]*:|("(\\"|[^"])*")|[^\(\)~"])+(?<!:)(:>|:(?![:=])))'
+      captures:
+        1: punctuation.section.type-constraint.syren
+      push:
+        - meta_scope: meta.parameter.type-constrained.syren
+        - match: (\))
+          captures:
+            1: punctuation.section.type-constraint.syren
+          pop: true
+        - match: "(?<!:)(:>|:(?![:=]))"
+          captures:
+            1: punctuation.separator.type-constraint.syren
+          push:
+            - meta_scope: storage.type.syren
+            - match: (?=\))
+              pop: true
+            - match: \(
+              push:
+                - meta_scope: meta.paren.group
+                - match: \)
+                  pop: true
+        - include: variables
+    - include: comments
+    - match: \(
+      push:
+        - meta_scope: meta.paren-group.syren
+        - match: \)
+          pop: true
+        - include: variables
+    - match: (\()
+      captures:
+        1: punctuation.definition.tuple.syren
+      push:
+        - meta_scope: variable.parameter.tuple.syren
+        - match: (\))
+          captures:
+            1: punctuation.definition.tuple.syren
+          pop: true
+        - include: matchpatterns
+        - include: variables
+        - match: ","
+          scope: punctuation.separator.tuple.syren
+    - match: '(\{)'
+      captures:
+        1: punctuation.definition.record.syren
+      push:
+        - meta_scope: variable.parameter.record.syren
+        - match: '(\})'
+          captures:
+            1: punctuation.definition.record.syren
+          pop: true
+        - include: moduleref
+        - match: '\b([a-z][a-zA-Z0-9''_]*)\s*(=)'
+          captures:
+            1: entity.name.tag.record.syren
+            2: punctuation.separator.record.field-assignment.syren
+          push:
+            - meta_scope: meta.recordfield.match.syren
+            - match: '(;)|(?=\})'
+              captures:
+                1: punctuation.separator.record.syren
+              pop: true
+            - include: matchpatterns
+    - include: storagetypes
+    - match: '\b[a-z_][a-zA-Z0-9''_]*'
+      scope: variable.parameter.syren

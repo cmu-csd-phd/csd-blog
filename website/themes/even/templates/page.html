@@ -53,6 +53,18 @@
               {{ person::person(person=member, addn=",") }}
             {% endif -%}
             {% endfor -%}
+
+            <!--
+            NOTE: this is only for the blog posts displayed on the screens in the hall.
+            Adding a hidden graphic to the end of each post so that if no other graphic exists
+            in the post, we won't just have a blank white space on the screen. TelemetryTV picsk the
+            firt image it finds in the post and will use this one if another doesn't exist because
+            it doesn't notice that it is marked as hidden by the CSS.
+            -->
+            <div class="telemetry-placeholder">
+                <img src="{{config.base_url}}/{{config.extra.blog_header}}" alt="hidden placholder"/>
+            </div>
+
             <br />
             {% if page.taxonomies.tags %}
                 <div class="post-tags">
