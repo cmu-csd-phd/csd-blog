@@ -15,9 +15,9 @@ tags = ["spatial-web", "indoor-mapping"]
 author = {name = "Sagar Bharadwaj", url = "https://sagar-bharadwaj-ks.github.io/" }
 # The committee specification is  a list of objects similar to the author.
 committee = [
-    {name = "Committee Member 1's Full Name", url = "Committee Member 1's page"},
-    {name = "Committee Member 2's Full Name", url = "Committee Member 2's page"},
-    {name = "Committee Member 3's Full Name", url = "Committee Member 3's page"}
+    {name = "Ruben Martins", url = "https://sat-group.github.io/ruben/"},
+    {name = "Tim Dettmers", url = "https://timdettmers.com/"},
+    {name = "Margarida Ferreira", url = "https://marghrid.github.io/"}
 ]
 +++
 
