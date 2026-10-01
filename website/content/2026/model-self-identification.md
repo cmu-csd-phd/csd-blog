@@ -1,6 +1,6 @@
 +++
 title = "Phantom transfer of model self-identification"
-date = 2026-09-01
+date = 2026-10-01
 
 [taxonomies]
 areas = ["Artificial Intelligence"]
@@ -9,7 +9,9 @@ tags = ["LLM", "persona", "fine-tuning", "distillation", "phantom transfer"]
 [extra]
 author = {name = "Ziqian Zhong", url = "https://fjzzq2002.github.io/" }
 committee = [
-    # TODO: Add committee members and their home-page URLs before submission.
+    {name = "Tim Dettmers", url = "https://timdettmers.com/"},
+    {name = "Daniel Fried", url = "https://dpfried.github.io/"},
+    {name = "Yixuan Even Xu", url = "https://yixuanevenxu.github.io/"}
 ]
 +++
 
