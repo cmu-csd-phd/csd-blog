@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="scope-reduction-diagram"
+  width="1200" height="690" viewBox="0 0 1200 690" role="img"
+  aria-labelledby="scope-title scope-description">
+<title id="scope-title">Team kind and filtering are separate choices</title>
+<desc id="scope-description">One warp holds the integers 1 through 64, two register values per thread.
+Top left: Tx.thread.sum produces 32 independent sums. Top right: Tx.warp.sum produces one logical
+sum of 2080. Only threads 0 and 1 are drawn; 30 more threads contribute to the top examples.
+Both bottom panels apply if tx == 0. In this single-warp example this is equivalent to laneid == 0,
+so only lane 0 executes. Its thread-scoped sum can produce 3. The illustrated warp-scoped sum
+still needs the other lanes' values, so this combination may be infeasible. No result is shown
+for that case. Filtering changes the active thread set while keeping the team kind and stored values unchanged.</desc>
+<defs>
+<marker id="scope-local-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#35688d"/></marker>
+<marker id="scope-collective-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#287354"/></marker>
+<marker id="scope-attempt-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8a4d08"/></marker>
+</defs>
+<rect x="0" y="0" width="1200" height="690" rx="0" fill="white" stroke="none" stroke-width="2"/>
+<text x="600" y="30" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">One warp · values 1–64 · two register values per thread</text>
+<rect x="16" y="50" width="568" height="287" rx="12" fill="#f7fafd" stroke="#c6d7e4" stroke-width="2"/>
+<text x="40" y="86" font-size="27" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">A. One sum per thread</text>
+<text x="40" y="117" font-size="22" text-anchor="start" fill="#172d3d" font-family="&quot;DejaVu Sans Mono&quot;, monospace" font-weight="400">Tx.thread.sum(...)</text>
+<rect x="35" y="133" width="530" height="46" rx="6" fill="#e7f0f7" stroke="#b9cede" stroke-width="2"/>
+<text x="50" y="164" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Thread 0</text>
+<rect x="184" y="139" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="207" y="164" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">1</text>
+<text x="250" y="164" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">+</text>
+<rect x="270" y="139" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="293" y="164" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">2</text>
+<path d="M 340 156 H 429" fill="none" stroke="#35688d" stroke-width="2.5" marker-end="url(#scope-local-arrow)"/>
+<rect x="448" y="138" width="83" height="36" rx="6" fill="white" stroke="#35688d" stroke-width="2"/>
+<text x="489" y="164" font-size="26" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">3</text>
+<rect x="35" y="195" width="530" height="46" rx="6" fill="#e7f0f7" stroke="#b9cede" stroke-width="2"/>
+<text x="50" y="226" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Thread 1</text>
+<rect x="184" y="201" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="207" y="226" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">3</text>
+<text x="250" y="226" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">+</text>
+<rect x="270" y="201" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="293" y="226" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">4</text>
+<path d="M 340 218 H 429" fill="none" stroke="#35688d" stroke-width="2.5" marker-end="url(#scope-local-arrow)"/>
+<rect x="448" y="200" width="83" height="36" rx="6" fill="white" stroke="#35688d" stroke-width="2"/>
+<text x="489" y="226" font-size="26" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">7</text>
+<text x="300" y="278" font-size="22" text-anchor="middle" fill="#63717c" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">⋮  30 more threads</text>
+<text x="300" y="317" font-size="22" text-anchor="middle" fill="#35688d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">32 active threads → 32 results</text>
+<rect x="616" y="50" width="568" height="287" rx="12" fill="#f6faf8" stroke="#bed6c9" stroke-width="2"/>
+<text x="640" y="86" font-size="27" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">B. One sum for the warp</text>
+<text x="640" y="117" font-size="22" text-anchor="start" fill="#172d3d" font-family="&quot;DejaVu Sans Mono&quot;, monospace" font-weight="400">Tx.warp.sum(...)</text>
+<rect x="635" y="131" width="530" height="164" rx="6" fill="#e7f3ed" stroke="#86b19b" stroke-width="2"/>
+<text x="650" y="164" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Thread 0</text>
+<rect x="762" y="139" width="104" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="814" y="164" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">1, 2</text>
+<path d="M 879 156 H 932" fill="none" stroke="#287354" stroke-width="2.5"/>
+<text x="650" y="226" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Thread 1</text>
+<rect x="762" y="201" width="104" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="814" y="226" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">3, 4</text>
+<path d="M 879 218 H 932" fill="none" stroke="#287354" stroke-width="2.5"/>
+<text x="774" y="278" font-size="21" text-anchor="middle" fill="#63717c" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">⋮  30 more threads</text>
+<path d="M 879 270 H 932" fill="none" stroke="#287354" stroke-width="2.5" stroke-dasharray="6 4"/>
+<path d="M 932 156 V 270 M 932 185 H 1002" fill="none" stroke="#287354" stroke-width="2.5" marker-end="url(#scope-collective-arrow)"/>
+<circle cx="1035" cy="185" r="26" fill="white" stroke="#287354" stroke-width="2.5"/>
+<text x="1035" y="198" font-size="38" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Σ</text>
+<path d="M 1035 214 V 233" fill="none" stroke="#287354" stroke-width="2.5" marker-end="url(#scope-collective-arrow)"/>
+<rect x="986" y="243" width="98" height="40" rx="6" fill="white" stroke="#287354" stroke-width="2"/>
+<text x="1035" y="272" font-size="27" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">2080</text>
+<text x="900" y="317" font-size="22" text-anchor="middle" fill="#287354" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">32 active threads → 1 logical result</text>
+<rect x="16" y="351" width="1168" height="65" rx="8" fill="#f0f3f6" stroke="none" stroke-width="2"/>
+<text x="600" y="377" font-size="24" text-anchor="middle" fill="#172d3d" font-family="&quot;DejaVu Sans Mono&quot;, monospace" font-weight="700">Filter both calls with if tx == 0:</text>
+<text x="600" y="403" font-size="22" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">In this one-warp example, only lane 0 executes (laneid == 0).</text>
+<rect x="16" y="432" width="568" height="220" rx="12" fill="#f7fafd" stroke="#c6d7e4" stroke-width="2"/>
+<text x="40" y="464" font-size="26" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">C. Thread sum after filtering</text>
+<text x="40" y="493" font-size="22" text-anchor="start" fill="#172d3d" font-family="&quot;DejaVu Sans Mono&quot;, monospace" font-weight="400">Tx.thread.sum(...)</text>
+<rect x="35" y="504" width="530" height="46" rx="6" fill="#e7f0f7" stroke="#b9cede" stroke-width="2"/>
+<text x="50" y="535" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Thread 0</text>
+<rect x="184" y="510" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="207" y="535" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">1</text>
+<text x="250" y="535" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">+</text>
+<rect x="270" y="510" width="46" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="293" y="535" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">2</text>
+<path d="M 340 527 H 429" fill="none" stroke="#35688d" stroke-width="2.5" marker-end="url(#scope-local-arrow)"/>
+<rect x="448" y="509" width="83" height="36" rx="6" fill="white" stroke="#35688d" stroke-width="2"/>
+<text x="489" y="535" font-size="26" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">3</text>
+<rect x="35" y="562" width="530" height="33" rx="6" fill="#eceff2" stroke="#d8dfe5" stroke-width="2"/>
+<text x="50" y="585" font-size="21" text-anchor="start" fill="#63717c" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Threads 1–31: not executing</text>
+<text x="300" y="633" font-size="22" text-anchor="middle" fill="#35688d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">1 active thread → 1 local sum</text>
+<rect x="616" y="432" width="568" height="220" rx="12" fill="#fffaf3" stroke="#d9bd93" stroke-width="2"/>
+<text x="640" y="464" font-size="26" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">D. Warp sum after filtering</text>
+<text x="640" y="493" font-size="22" text-anchor="start" fill="#172d3d" font-family="&quot;DejaVu Sans Mono&quot;, monospace" font-weight="400">Tx.warp.sum(...)</text>
+<rect x="635" y="504" width="530" height="91" rx="6" fill="#fff6e8" stroke="#c09860" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="650" y="536" font-size="21" text-anchor="start" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Lane 0</text>
+<rect x="762" y="513" width="104" height="34" rx="6" fill="white" stroke="none" stroke-width="2"/>
+<text x="814" y="538" font-size="25" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">1, 2</text>
+<path d="M 879 530 H 1002" fill="none" stroke="#8a4d08" stroke-width="2.5" marker-end="url(#scope-attempt-arrow)"/>
+<circle cx="1035" cy="530" r="24" fill="white" stroke="#8a4d08" stroke-width="2.5" stroke-dasharray="5 4"/>
+<text x="1035" y="543" font-size="35" text-anchor="middle" fill="#8a4d08" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Σ</text>
+<rect x="643" y="558" width="339" height="30" rx="6" fill="#eceff2" stroke="#d8dfe5" stroke-width="2"/>
+<text x="654" y="580" font-size="20" text-anchor="start" fill="#63717c" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Lanes 1–31: not executing</text>
+<text x="900" y="618" font-size="23" text-anchor="middle" fill="#8a4d08" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="700">May be infeasible</text>
+<text x="900" y="643" font-size="21" text-anchor="middle" fill="#8a4d08" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Other lanes hold required values.</text>
+<text x="600" y="681" font-size="22" text-anchor="middle" fill="#172d3d" font-family="Arial, &quot;DejaVu Sans&quot;, sans-serif" font-weight="400">Filtering changes which threads execute; the values stay in their registers.</text>
+</svg>
