@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="880" height="300" fill="#ffffff"/>
+
+  <!-- Row A: KV cache blocks -->
+  <text x="20" y="34" font-size="16" font-weight="bold" fill="#222">KV cache</text>
+  <text x="20" y="51" font-size="13" fill="#555">in blocks of b tokens</text>
+  <g stroke="#ffffff" stroke-width="1.5">
+    <g fill="#C9D4E6">
+      <rect x="210" y="18" width="70" height="36"/>
+      <rect x="374" y="18" width="70" height="36"/>
+      <rect x="456" y="18" width="70" height="36"/>
+      <rect x="620" y="18" width="70" height="36"/>
+      <rect x="702" y="18" width="70" height="36"/>
+    </g>
+    <g fill="#E8935F">
+      <rect x="292" y="18" width="70" height="36"/>
+      <rect x="538" y="18" width="70" height="36"/>
+      <rect x="784" y="18" width="70" height="36"/>
+    </g>
+    <!-- token dividers -->
+    <g>
+      <line x1="227.5" y1="18" x2="227.5" y2="54"/><line x1="245" y1="18" x2="245" y2="54"/><line x1="262.5" y1="18" x2="262.5" y2="54"/>
+      <line x1="309.5" y1="18" x2="309.5" y2="54"/><line x1="327" y1="18" x2="327" y2="54"/><line x1="344.5" y1="18" x2="344.5" y2="54"/>
+      <line x1="391.5" y1="18" x2="391.5" y2="54"/><line x1="409" y1="18" x2="409" y2="54"/><line x1="426.5" y1="18" x2="426.5" y2="54"/>
+      <line x1="473.5" y1="18" x2="473.5" y2="54"/><line x1="491" y1="18" x2="491" y2="54"/><line x1="508.5" y1="18" x2="508.5" y2="54"/>
+      <line x1="555.5" y1="18" x2="555.5" y2="54"/><line x1="573" y1="18" x2="573" y2="54"/><line x1="590.5" y1="18" x2="590.5" y2="54"/>
+      <line x1="637.5" y1="18" x2="637.5" y2="54"/><line x1="655" y1="18" x2="655" y2="54"/><line x1="672.5" y1="18" x2="672.5" y2="54"/>
+      <line x1="719.5" y1="18" x2="719.5" y2="54"/><line x1="737" y1="18" x2="737" y2="54"/><line x1="754.5" y1="18" x2="754.5" y2="54"/>
+      <line x1="801.5" y1="18" x2="801.5" y2="54"/><line x1="819" y1="18" x2="819" y2="54"/><line x1="836.5" y1="18" x2="836.5" y2="54"/>
+    </g>
+  </g>
+
+  <!-- Row B: block summaries -->
+  <text x="20" y="90" font-size="15" font-weight="bold" fill="#222">① Summarize blocks</text>
+  <text x="20" y="107" font-size="13" fill="#555">mean key, computed once</text>
+  <g stroke="#8A63B8" stroke-width="1.4">
+    <line x1="245" y1="56" x2="245" y2="85"/><line x1="327" y1="56" x2="327" y2="85"/>
+    <line x1="409" y1="56" x2="409" y2="85"/><line x1="491" y1="56" x2="491" y2="85"/>
+    <line x1="573" y1="56" x2="573" y2="85"/><line x1="655" y1="56" x2="655" y2="85"/>
+    <line x1="737" y1="56" x2="737" y2="85"/><line x1="819" y1="56" x2="819" y2="85"/>
+  </g>
+  <g fill="#8A63B8">
+    <circle cx="245" cy="92" r="7"/><circle cx="327" cy="92" r="7"/><circle cx="409" cy="92" r="7"/><circle cx="491" cy="92" r="7"/>
+    <circle cx="573" cy="92" r="7"/><circle cx="655" cy="92" r="7"/><circle cx="737" cy="92" r="7"/><circle cx="819" cy="92" r="7"/>
+  </g>
+
+  <!-- Row C: scores -->
+  <text x="20" y="146" font-size="15" font-weight="bold" fill="#222">② Score with query q</text>
+  <text x="20" y="163" font-size="13" fill="#555">every decode step</text>
+  <g font-size="16" text-anchor="middle" fill="#666">
+    <text x="245" y="150">0.12</text>
+    <text x="327" y="150" font-weight="bold" fill="#C8561F">0.91</text>
+    <text x="409" y="150">0.20</text>
+    <text x="491" y="150">0.05</text>
+    <text x="573" y="150" font-weight="bold" fill="#C8561F">0.66</text>
+    <text x="655" y="150">0.10</text>
+    <text x="737" y="150">0.31</text>
+    <text x="819" y="150" font-weight="bold" fill="#C8561F">0.83</text>
+  </g>
+
+  <!-- Row D: keep top-k and attend -->
+  <text x="20" y="208" font-size="15" font-weight="bold" fill="#222">③ Keep top-k (k = 3)</text>
+  <text x="20" y="227" font-size="15" font-weight="bold" fill="#222">④ Attend to those only</text>
+  <g stroke="#ffffff" stroke-width="1.5" fill="#E8935F">
+    <rect x="210" y="196" width="70" height="36"/>
+    <rect x="292" y="196" width="70" height="36"/>
+    <rect x="374" y="196" width="70" height="36"/>
+  </g>
+  <text x="327" y="252" font-size="13" fill="#555" text-anchor="middle">the 3 selected blocks</text>
+  <line x1="452" y1="214" x2="500" y2="214" stroke="#444" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="505" y="194" width="170" height="40" rx="6" fill="#ffffff" stroke="#444" stroke-width="1.4"/>
+  <text x="590" y="219" font-size="15" fill="#222" text-anchor="middle">exact attention</text>
+  <line x1="677" y1="214" x2="725" y2="214" stroke="#444" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="732" y="219" font-size="15" fill="#222">output</text>
+
+  <text x="20" y="286" font-size="14" fill="#444">Each step reads 3 of the 8 KV blocks, plus the 8 small summaries, instead of the whole cache.</text>
+</svg>
