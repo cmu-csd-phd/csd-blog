@@ -1,5 +1,8 @@
 #! /bin/sh
 
+ROOT=../generated-website
+ZIP=$ROOT-$(date '+%Y-%m-%d').zip
+
 git checkout "main" || exit 1
 git pull || exit 2
 
@@ -10,8 +13,8 @@ cd website/ || exit 255
 # only needed when generating the live site, local builds don't need this
 find . -path "./*/20*/index.html" -exec ../fix-image-paths.py "{}" \;
 
-rm -f ../generated-website.zip
-zip -r ../generated-website.zip public/
+rm -f $ROOT*
+zip -r "$ZIP"  public/
 cd ../
 
-echo "generated-website.zip has been generated. Please put this onto AFS at the right location (/afs/cs.cmu.edu/project/csd-phd-blog/www)."
+echo "$ZIP has been generated. Please put this onto AFS at the right location (/afs/cs.cmu.edu/project/csd-phd-blog/www)."
